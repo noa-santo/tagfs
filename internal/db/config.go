@@ -13,10 +13,14 @@ var (
 	bucketName = []byte("config")
 )
 
+// PassthroughDirs todo: replace with real config
+var PassthroughDirs = []string{".config", ".passthrough"}
+
 // Config holds the paths we need to persist
 type Config struct {
-	MountPath   string
-	StoragePath string
+	MountPath       string   `json:"mount_path"`
+	StoragePath     string   `json:"storage_path"`
+	PassthroughDirs []string `json:"passthrough_dirs"`
 }
 
 func getDBPath() (string, error) {

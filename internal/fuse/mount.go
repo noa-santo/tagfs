@@ -1,6 +1,7 @@
 package fuse
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -26,6 +27,8 @@ func StartDaemon(storagePath, mountPoint string) {
 		log.Fatalf("Mount fail: %v\n", err)
 	}
 	logger.Printf("Mounted %s at %s", storagePath, mountPoint)
+
+	root.initPassthrough(context.Background())
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
