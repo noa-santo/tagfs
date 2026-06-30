@@ -5,6 +5,7 @@ go 1.26.3
 require (
 	github.com/hanwen/go-fuse/v2 v2.10.1
 	github.com/spf13/cobra v1.10.2
+	go.etcd.io/bbolt v1.5.0
 )
 
 require (

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/noa-santo/tagfs/internal/db"
 	"github.com/noa-santo/tagfs/internal/fuse"
 	"github.com/spf13/cobra"
 )
@@ -16,24 +17,27 @@ func main() {
 		Use:   "mount",
 		Short: "Starts the tagfs FUSE daemon",
 		Run: func(cmd *cobra.Command, args []string) {
-			if storage == "" || mount == "" {
-				fmt.Println("Error: --storage and --mount are required")
-				os.Exit(1)
+			var config db.Config
+
+			if storage != "" && mount != "" {
+				config = db.Config{MountPath: mount, StoragePath: storage}
+				if err := db.SaveConfig(config); err != nil {
+					fmt.Printf("Failed to save config: %v\n", err)
+				}
+			} else {
+				var err error
+				config, err = db.LoadConfig()
+				if err != nil {
+					fmt.Println("No configuration found. Please run with --storage and --mount.")
+					os.Exit(1)
+				}
 			}
 			fmt.Println("Starting tagfs Daemon...")
-			fuse.StartDaemon(storage, mount)
+			fuse.StartDaemon(config.StoragePath, config.MountPath)
 		},
 	}
 	mountCmd.Flags().StringVar(&storage, "storage", "", "Path to physical storage")
 	mountCmd.Flags().StringVar(&mount, "mount", "", "Path to mount point")
-
-	var unmountCmd = &cobra.Command{
-		Use:   "unmount",
-		Short: "Unmounts the tagfs FUSE daemon",
-		Run: func(cmd *cobra.Command, args []string) {
-			// todo
-		},
-	}
 
 	var manageCmd = &cobra.Command{
 		Use:   "manage",
@@ -44,7 +48,7 @@ func main() {
 		},
 	}
 
-	rootCmd.AddCommand(mountCmd, unmountCmd, manageCmd)
+	rootCmd.AddCommand(mountCmd, manageCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
