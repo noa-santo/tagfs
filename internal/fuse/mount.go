@@ -21,7 +21,7 @@ func StartDaemon(storagePath, mountPoint string) {
 			Debug: true,
 		},
 	}
-	root := &fsNode{}
+	root := &rootNode{}
 	server, err := fs.Mount(mountPoint, root, opts)
 	if err != nil {
 		log.Fatalf("Mount fail: %v\n", err)

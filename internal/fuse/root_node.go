@@ -9,11 +9,11 @@ import (
 	"github.com/noa-santo/tagfs/internal/db"
 )
 
-type fsNode struct {
+type rootNode struct {
 	fs.Inode
 }
 
-func (n *fsNode) initPassthrough(ctx context.Context) {
+func (n *rootNode) initPassthrough(ctx context.Context) {
 	for _, dirName := range db.PassthroughDirs {
 		config, _ := db.LoadConfig()
 		path := filepath.Join(config.StoragePath, dirName)
