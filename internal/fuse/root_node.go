@@ -36,13 +36,28 @@ func (n *rootNode) initPassthrough(ctx context.Context) {
 
 func (n *rootNode) initInbox(ctx context.Context) {
 	n.inboxNode = newInboxNode()
-	childINode := n.NewPersistentInode(ctx, n.inboxNode, fs.StableAttr{})
+	childINode := n.NewPersistentInode(ctx, n.inboxNode, fs.StableAttr{Mode: syscall.S_IFDIR})
 	n.AddChild(db.InboxDir, childINode, true)
 }
 
 func (n *rootNode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
-	rootLogger.Println("Create", name, flags, mode, out)
-	return n.inboxNode.Create(ctx, name, flags, mode, out)
+	rootLogger.Printf("Forwarding %s to the inbox", name)
+	childInode, fh, sysFlags, errno := n.inboxNode.Create(ctx, name, flags, mode, out)
+	if errno != 0 {
+		return nil, nil, 0, errno
+	}
+
+	out.EntryValid = 0
+	out.AttrValid = 0
+
+	go func() {
+		n.RmChild(name)
+		errno = n.NotifyEntry(name)
+		if errno != 0 {
+			rootLogger.Printf("Error notifying entry %q: %v", name, errno)
+		}
+	}()
+	return childInode, fh, sysFlags, 0
 }
 
 var _ = (fs.NodeCreater)((*rootNode)(nil))
