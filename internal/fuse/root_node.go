@@ -60,4 +60,25 @@ func (n *rootNode) Create(ctx context.Context, name string, flags uint32, mode u
 	return childInode, fh, sysFlags, 0
 }
 
+func (n *rootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+	rootLogger.Printf("Forwarding %s to the inbox", name)
+	childInode, errno := n.inboxNode.Mkdir(ctx, name, mode, out)
+	if errno != 0 {
+		return nil, errno
+	}
+
+	out.EntryValid = 0
+	out.AttrValid = 0
+
+	go func() {
+		n.RmChild(name)
+		errno = n.NotifyEntry(name)
+		if errno != 0 {
+			rootLogger.Printf("Error notifying entry %q: %v", name, errno)
+		}
+	}()
+
+	return childInode, 0
+}
+
 var _ = (fs.NodeCreater)((*rootNode)(nil))
