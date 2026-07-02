@@ -18,7 +18,7 @@ in {
     systemd.user.services.tagfs = {
       Unit = { Description = "tagfs FUSE"; };
       Service = {
-        ExecStart = "${cfg.package}/bin/tagfs --config ${configFile}";
+        ExecStart = "${cfg.package}/bin/tagfs mount --config ${configFile}";
         Restart = "on-failure";
       };
       Install = { WantedBy = [ "default.target" ]; };

@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/noa-santo/tagfs/internal/db"
+	"github.com/noa-santo/tagfs/internal/config"
 	"github.com/noa-santo/tagfs/internal/fuse"
 	"github.com/spf13/cobra"
 )
@@ -12,33 +12,25 @@ import (
 var mainLogger = log.New(os.Stdout, "MAIN: ", log.LstdFlags)
 
 func main() {
-	var storage, mount string
+	var configPath string
 	var rootCmd = &cobra.Command{Use: "tagfs"}
 
 	var mountCmd = &cobra.Command{
 		Use:   "mount",
 		Short: "Starts the tagfs FUSE daemon",
 		Run: func(cmd *cobra.Command, args []string) {
-			var config db.Config
-
-			if storage != "" && mount != "" {
-				config = db.Config{MountPath: mount, StoragePath: storage}
-				if err := db.SaveConfig(config); err != nil {
-					mainLogger.Fatalf("Failed to save config: %v\n", err)
-				}
-			} else {
-				var err error
-				config, err = db.LoadConfig()
-				if err != nil {
-					mainLogger.Panicf("No configuration found. Please run with --storage and --mount.")
-				}
+			if configPath == "" {
+				mainLogger.Panic("No config supplied! Supply a config with --config <path>")
+			}
+			err := config.InitConfig(configPath)
+			if err != nil {
+				mainLogger.Panicf("Error while loading config: %v", err)
 			}
 			mainLogger.Println("Starting tagfs Daemon...")
-			fuse.StartDaemon(config.StoragePath, config.MountPath)
+			fuse.StartDaemon()
 		},
 	}
-	mountCmd.Flags().StringVar(&storage, "storage", "", "Path to physical storage")
-	mountCmd.Flags().StringVar(&mount, "mount", "", "Path to mount point")
+	mountCmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
 
 	var manageCmd = &cobra.Command{
 		Use:   "manage",

@@ -3,7 +3,6 @@ package fuse
 import (
 	"context"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -11,8 +10,6 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	goFuse "github.com/hanwen/go-fuse/v2/fuse"
 )
-
-var passthroughLogger = log.New(os.Stdout, "PASSTHROUGH NODE: ", log.LstdFlags|log.Lmicroseconds)
 
 type passthroughNode struct {
 	fs.Inode

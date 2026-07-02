@@ -9,7 +9,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/noa-santo/tagfs/internal/db"
+	"github.com/noa-santo/tagfs/internal/config"
 )
 
 var rootLogger = log.New(os.Stdout, "ROOT NODE: ", log.LstdFlags|log.Lmicroseconds)
@@ -25,9 +25,8 @@ func (n *rootNode) init(ctx context.Context) {
 }
 
 func (n *rootNode) initPassthrough(ctx context.Context) {
-	for _, dirName := range db.PassthroughDirs {
-		config, _ := db.LoadConfig()
-		path := filepath.Join(config.StoragePath, dirName)
+	for _, dirName := range config.Get().PassthroughDirs {
+		path := filepath.Join(config.Get().StoragePath, dirName)
 		childNode := &passthroughNode{Path: path}
 		childINode := n.NewPersistentInode(ctx, childNode, fs.StableAttr{Mode: syscall.S_IFDIR})
 		n.AddChild(dirName, childINode, true)
@@ -37,7 +36,7 @@ func (n *rootNode) initPassthrough(ctx context.Context) {
 func (n *rootNode) initInbox(ctx context.Context) {
 	n.inboxNode = newInboxNode()
 	childINode := n.NewPersistentInode(ctx, n.inboxNode, fs.StableAttr{Mode: syscall.S_IFDIR})
-	n.AddChild(db.InboxDir, childINode, true)
+	n.AddChild(config.Get().InboxDir, childINode, true)
 }
 
 func (n *rootNode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
