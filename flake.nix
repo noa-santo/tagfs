@@ -10,7 +10,7 @@
       pname = "tagfs";
       version = "0.1.0";
       src = ./.;
-      vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # 'go mod vendor'
+      vendorHash = "sha256-EhadGdk4wpYkvakS4IfswISfFRWTUpDC0SMa/RnO9ZA=";
       meta.mainProgram = "tagfs";
     };
     
