@@ -11,10 +11,10 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
+var logger = log.New(os.Stdout, "DAEMON: ", log.LstdFlags|log.Lmicroseconds)
+
 // StartDaemon initializes the FUSE mount
 func StartDaemon(storagePath, mountPoint string) {
-	logger := log.New(os.Stderr, "FUSE", log.LstdFlags|log.Lmicroseconds)
-
 	opts := &fs.Options{
 		Logger: logger,
 		MountOptions: fuse.MountOptions{
@@ -24,18 +24,18 @@ func StartDaemon(storagePath, mountPoint string) {
 	root := &rootNode{}
 	server, err := fs.Mount(mountPoint, root, opts)
 	if err != nil {
-		log.Fatalf("Mount fail: %v\n", err)
+		logger.Fatalf("Mount fail: %v\n", err)
 	}
 	logger.Printf("Mounted %s at %s", storagePath, mountPoint)
 
-	root.initPassthrough(context.Background())
+	root.init(context.Background())
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-sigChan
-		log.Println("Signal received, unmounting...")
+		logger.Println("Signal received, unmounting...")
 		err := server.Unmount()
 		if err != nil {
 			logger.Fatalf("Fatal error while unmounting: %s", err)

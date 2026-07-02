@@ -1,13 +1,15 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"os"
 
 	"github.com/noa-santo/tagfs/internal/db"
 	"github.com/noa-santo/tagfs/internal/fuse"
 	"github.com/spf13/cobra"
 )
+
+var mainLogger = log.New(os.Stdout, "MAIN: ", log.LstdFlags)
 
 func main() {
 	var storage, mount string
@@ -22,17 +24,16 @@ func main() {
 			if storage != "" && mount != "" {
 				config = db.Config{MountPath: mount, StoragePath: storage}
 				if err := db.SaveConfig(config); err != nil {
-					fmt.Printf("Failed to save config: %v\n", err)
+					mainLogger.Fatalf("Failed to save config: %v\n", err)
 				}
 			} else {
 				var err error
 				config, err = db.LoadConfig()
 				if err != nil {
-					fmt.Println("No configuration found. Please run with --storage and --mount.")
-					os.Exit(1)
+					mainLogger.Panicf("No configuration found. Please run with --storage and --mount.")
 				}
 			}
-			fmt.Println("Starting tagfs Daemon...")
+			mainLogger.Println("Starting tagfs Daemon...")
 			fuse.StartDaemon(config.StoragePath, config.MountPath)
 		},
 	}
@@ -43,7 +44,7 @@ func main() {
 		Use:   "manage",
 		Short: "Starts the management TUI",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("Opening Inbox Manager...")
+			mainLogger.Println("Opening Inbox Manager...")
 			// todo: Call your Bubbletea TUI initialization logic here
 		},
 	}
@@ -51,7 +52,6 @@ func main() {
 	rootCmd.AddCommand(mountCmd, manageCmd)
 
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		mainLogger.Fatalf("Error executing command: %v\n", err)
 	}
 }
