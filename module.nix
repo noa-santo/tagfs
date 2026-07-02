@@ -22,6 +22,7 @@ in {
         Restart = "on-failure";
       };
       Install = { WantedBy = [ "default.target" ]; };
+      Environment = "TAGFS_SOCKET=/run/user/${builtins.toString config.ids.uids.user}/tagfs.sock";
     };
   };
 }

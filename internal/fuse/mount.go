@@ -30,6 +30,7 @@ func StartDaemon() {
 	logger.Printf("Mounted %s at %s", config.Get().StoragePath, config.Get().MountPath)
 
 	root.init(context.Background())
+	go startCommandListener()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
