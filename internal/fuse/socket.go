@@ -71,7 +71,51 @@ func handleListInbox(conn net.Conn) {
 func handleListTags(conn net.Conn) {
 	tags := config.Get().GetAllTags()
 	tags = append(tags, "overwrite")
-	_ = json.NewEncoder(conn).Encode(tags)
+	if err := json.NewEncoder(conn).Encode(tags); err != nil {
+		logger.Printf("Error writing tags: %v", err)
+	}
+}
+
+func handleCheckTagCompatibility(conn net.Conn) {
+	reader := bufio.NewReader(conn)
+	existingTagsString, err := reader.ReadString('\n')
+	if err != nil {
+		logger.Printf("Error reading existing tags: %v", err)
+		return
+	}
+	existingTags := make([]string, 0)
+	if err = json.Unmarshal([]byte(existingTagsString), &existingTags); err != nil {
+		logger.Printf("Error unmarshalling existing tags: %v", err)
+		return
+	}
+
+	newTag, err := reader.ReadString('\n')
+	if err != nil {
+		logger.Printf("Error reading new tag: %v", err)
+		return
+	}
+	if err = json.NewEncoder(conn).Encode(config.Get().IsTagCompatible(newTag, existingTags)); err != nil {
+		logger.Printf("Error writing compatibility: %v", err)
+		return
+	}
+}
+
+func handleGetImplicitTags(conn net.Conn) {
+	reader := bufio.NewReader(conn)
+	tagsString, err := reader.ReadString('\n')
+	if err != nil {
+		logger.Printf("Error reading existing tags: %v", err)
+		return
+	}
+	tags := make([]string, 0)
+	if err = json.Unmarshal([]byte(tagsString), &tags); err != nil {
+		logger.Printf("Error unmarshalling existing tags: %v", err)
+		return
+	}
+	if err = json.NewEncoder(conn).Encode(config.Get().GetImplicitTags(tags)); err != nil {
+		logger.Printf("Error writing implicit tags: %v", err)
+		return
+	}
 }
 
 func handleConnection(conn net.Conn) {
@@ -97,6 +141,12 @@ func handleConnection(conn net.Conn) {
 		break
 	case "LIST_TAGS\n":
 		handleListTags(conn)
+		break
+	case "CHECK_TAG_COMPATIBILITY\n":
+		handleCheckTagCompatibility(conn)
+		break
+	case "GET_IMPLICIT_TAGS\n":
+		handleGetImplicitTags(conn)
 		break
 	default:
 		logger.Printf("Unknown command: %s", cmd)
