@@ -2,6 +2,7 @@ package tui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -88,4 +89,31 @@ func fetchTags(socketPath string) tea.Cmd {
 
 		return tagMsg(tags)
 	}
+}
+
+func isTagCompatible(socketPath string, newTag string, existingTags []string) (bool, error) {
+	conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
+	if err != nil {
+		return false, errors.New(fmt.Sprintf("Error connecting to socket: %v", err))
+	}
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			fmt.Println("Error closing connection:", err)
+		}
+	}(conn)
+
+	existingTagsString, err := json.Marshal(existingTags)
+	if err != nil {
+		return false, errors.New(fmt.Sprintf("Error marshalling existing tags: %v", err))
+	}
+	_, err = conn.Write([]byte(fmt.Sprintf("CHECK_TAG_COMPATIBILITY\n%s\n%s\n", existingTagsString, newTag)))
+	if err != nil {
+		return false, errors.New(fmt.Sprintf("Error writing to socket: %v", err))
+	}
+	var isCompatible bool
+	if err := json.NewDecoder(conn).Decode(&isCompatible); err != nil {
+		return false, errors.New(fmt.Sprintf("Error reading from socket: %v", err))
+	}
+	return isCompatible, nil
 }

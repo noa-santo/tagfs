@@ -157,6 +157,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if slices.Contains(m.pendingTags[item.Name], tag) {
 						return m.showToast(fmt.Sprintf("Tag '%s' already exists", tag), true)
 					}
+					if len(m.pendingTags[item.Name]) > 0 {
+						compatible, err := isTagCompatible(m.socketPath, tag, m.pendingTags[item.Name])
+						if err != nil {
+							return m.showToast(fmt.Sprintf("could not check compatibility: %s", err.Error()), true)
+						}
+						if !compatible {
+							return m.showToast(fmt.Sprintf("tag '%s' is not compatible with existing tags", tag), true)
+						}
+					}
 					m.pendingTags[item.Name] = append(m.pendingTags[item.Name], tag)
 					m.tagInput.SetValue("")
 					sort.Strings(m.pendingTags[item.Name])

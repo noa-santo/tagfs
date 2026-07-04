@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/noa-santo/tagfs/internal/config"
@@ -76,8 +77,7 @@ func handleListTags(conn net.Conn) {
 	}
 }
 
-func handleCheckTagCompatibility(conn net.Conn) {
-	reader := bufio.NewReader(conn)
+func handleCheckTagCompatibility(conn net.Conn, reader *bufio.Reader) {
 	existingTagsString, err := reader.ReadString('\n')
 	if err != nil {
 		logger.Printf("Error reading existing tags: %v", err)
@@ -89,19 +89,19 @@ func handleCheckTagCompatibility(conn net.Conn) {
 		return
 	}
 
-	newTag, err := reader.ReadString('\n')
+	newTagRaw, err := reader.ReadString('\n')
 	if err != nil {
 		logger.Printf("Error reading new tag: %v", err)
 		return
 	}
+	newTag := strings.TrimSpace(strings.TrimSuffix(newTagRaw, "\n"))
 	if err = json.NewEncoder(conn).Encode(config.Get().IsTagCompatible(newTag, existingTags)); err != nil {
 		logger.Printf("Error writing compatibility: %v", err)
 		return
 	}
 }
 
-func handleGetImplicitTags(conn net.Conn) {
-	reader := bufio.NewReader(conn)
+func handleGetImplicitTags(conn net.Conn, reader *bufio.Reader) {
 	tagsString, err := reader.ReadString('\n')
 	if err != nil {
 		logger.Printf("Error reading existing tags: %v", err)
@@ -143,10 +143,10 @@ func handleConnection(conn net.Conn) {
 		handleListTags(conn)
 		break
 	case "CHECK_TAG_COMPATIBILITY\n":
-		handleCheckTagCompatibility(conn)
+		handleCheckTagCompatibility(conn, reader)
 		break
 	case "GET_IMPLICIT_TAGS\n":
-		handleGetImplicitTags(conn)
+		handleGetImplicitTags(conn, reader)
 		break
 	default:
 		logger.Printf("Unknown command: %s", cmd)
