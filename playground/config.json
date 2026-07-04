@@ -1,6 +1,0 @@
-{
-  "mount_path": "/home/owo/Projects/tagfs/playground/mnt",
-  "storage_path": "/home/owo/Projects/tagfs/playground/storage",
-  "passthrough_dirs": [".config", "passthrough"],
-  "inbox_dir": "Inbox"
-}
