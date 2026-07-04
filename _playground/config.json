@@ -67,7 +67,7 @@
     {
       "name": "Downloads",
       "description": "Web downloads and temporary incoming files",
-      "tags": ["download", "incoming"],
+      "tags": ["downloads", "download"],
       "dangerous_volatile": false,
       "rules": {
         "mime_types": [],

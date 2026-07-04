@@ -63,3 +63,29 @@ func fetchInboxItems(socketPath string) tea.Cmd {
 		return items
 	}
 }
+
+func fetchTags(socketPath string) tea.Cmd {
+	return func() tea.Msg {
+		conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
+		if err != nil {
+			return err
+		}
+		defer func(conn net.Conn) {
+			err := conn.Close()
+			if err != nil {
+				fmt.Println("Error closing connection:", err)
+			}
+		}(conn)
+
+		if _, err := conn.Write([]byte("LIST_TAGS\n")); err != nil {
+			return err
+		}
+
+		var tags []string
+		if err := json.NewDecoder(conn).Decode(&tags); err != nil {
+			return err
+		}
+
+		return tagMsg(tags)
+	}
+}

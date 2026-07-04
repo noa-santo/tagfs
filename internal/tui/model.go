@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
 
 	"charm.land/bubbles/v2/help"
@@ -26,6 +28,8 @@ func formatBytes(bytes int64) string {
 	}
 	return fmt.Sprintf("%.1f %s", value, suffixes[i])
 }
+
+type tagMsg []string
 
 type focusArea int
 
@@ -62,6 +66,7 @@ func initialModel(socketPath string) model {
 	ti := textinput.New()
 	ti.Placeholder = "type a tag and press enter"
 	ti.CharLimit = 48
+	ti.ShowSuggestions = true
 	ti.SetWidth(32)
 
 	h := help.New()
@@ -81,7 +86,7 @@ func initialModel(socketPath string) model {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(fetchInboxItems(m.socketPath), m.spinner.Tick)
+	return tea.Batch(fetchInboxItems(m.socketPath), fetchTags(m.socketPath), m.spinner.Tick)
 }
 
 func (m model) selectedItem() (fuse.InboxEntry, bool) {
@@ -103,6 +108,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case []fuse.InboxEntry:
 		m.items = msg
 		m.loading = false
+		return m, nil
+
+	case tagMsg:
+		m.tagInput.SetSuggestions(msg)
 		return m, nil
 
 	case error:
@@ -127,10 +136,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "enter":
 				if item, ok := m.selectedItem(); ok {
-					if tag := strings.TrimSpace(m.tagInput.Value()); tag != "" {
+					if tag := strings.TrimSpace(m.tagInput.CurrentSuggestion()); tag != "" && !slices.Contains(m.pendingTags[item.Name], tag) {
 						m.pendingTags[item.Name] = append(m.pendingTags[item.Name], tag)
-						m.tagInput.SetValue("")
 					}
+					m.tagInput.SetValue("")
+					sort.Strings(m.pendingTags[item.Name])
 				}
 				return m, nil
 			case "tab":
@@ -238,14 +248,14 @@ func (m model) listPanel(width, height int) string {
 			line := fmt.Sprintf("%s %s", icon, item.Name)
 
 			if tags := m.pendingTags[item.Name]; len(tags) > 0 {
-				line += rowDimStyle.Render(fmt.Sprintf("  %s%d", iconTag, len(tags)))
+				line += rowDimStyle.Render(fmt.Sprintf("  %s %d", iconTag, len(tags)))
 			}
 
 			if i == m.cursor {
 				cursor = iconChevron + " "
 				line = rowSelectedStyle.Render(fmt.Sprintf(" %s %s ", icon, item.Name))
 				if tags := m.pendingTags[item.Name]; len(tags) > 0 {
-					line += " " + rowDimStyle.Render(fmt.Sprintf("%s%d", iconTag, len(tags)))
+					line += " " + rowDimStyle.Render(fmt.Sprintf("%s %d", iconTag, len(tags)))
 				}
 			} else {
 				line = nameStyle.Render(line)

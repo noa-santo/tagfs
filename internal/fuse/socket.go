@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/noa-santo/tagfs/internal/config"
 )
 
 func removeIfExist(path string) {
@@ -66,6 +68,12 @@ func handleListInbox(conn net.Conn) {
 	}
 }
 
+func handleListTags(conn net.Conn) {
+	tags := config.Get().GetAllTags()
+	tags = append(tags, "overwrite")
+	_ = json.NewEncoder(conn).Encode(tags)
+}
+
 func handleConnection(conn net.Conn) {
 	defer func(conn net.Conn) {
 		err := conn.Close()
@@ -86,6 +94,9 @@ func handleConnection(conn net.Conn) {
 		break
 	case "LIST_INBOX\n":
 		handleListInbox(conn)
+		break
+	case "LIST_TAGS\n":
+		handleListTags(conn)
 		break
 	default:
 		logger.Printf("Unknown command: %s", cmd)
