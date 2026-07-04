@@ -23,11 +23,25 @@ type focusArea int
 
 const (
 	focusList focusArea = iota
+	focusSuggested
 	focusTagInput
 	focusApply
 	focusCancel
 	focusCount
 )
+
+type selectableTag struct {
+	name     string
+	selected bool
+}
+
+type suggestionState struct {
+	common      []selectableTag
+	options     [][]selectableTag
+	activeOpt   int
+	cursorGroup int
+	cursorIdx   int
+}
 
 type model struct {
 	socketPath          string
@@ -42,6 +56,7 @@ type model struct {
 	tagInput            textinput.Model
 	pendingTags         map[string][]string
 	implicitPendingTags map[string][]string
+	suggestions         map[string]*suggestionState
 	keys                keyMap
 	help                help.Model
 	toastMsg            string
@@ -73,9 +88,45 @@ func initialModel(socketPath string) model {
 		tagInput:            ti,
 		pendingTags:         make(map[string][]string),
 		implicitPendingTags: make(map[string][]string),
+		suggestions:         make(map[string]*suggestionState),
 		keys:                defaultKeyMap(),
 		help:                h,
 	}
+}
+
+func (m model) setSuggestionState() (model, tea.Cmd) {
+	currentSuggestion, err := getSuggestions(m.socketPath, m.items[m.cursor].Name)
+	if err != nil {
+		return m.showToast(fmt.Sprintf("could not get suggestions: %s", err.Error()), true)
+	}
+
+	state := &suggestionState{
+		activeOpt:   -1,
+		cursorGroup: -1,
+	}
+
+	for _, t := range currentSuggestion.CommonTags {
+		if slices.Contains(m.pendingTags[m.items[m.cursor].Name], t) {
+			continue
+		}
+		state.common = append(state.common, selectableTag{name: t, selected: true})
+	}
+
+	for _, optGroup := range currentSuggestion.Options {
+		var opt []selectableTag
+		for _, t := range optGroup {
+			opt = append(opt, selectableTag{name: t, selected: false})
+		}
+		state.options = append(state.options, opt)
+	}
+
+	if len(state.common) == 0 && len(state.options) > 0 {
+		state.cursorGroup = 0
+	}
+
+	m.suggestions[m.items[m.cursor].Name] = state
+
+	return m, nil
 }
 
 func (m model) showToast(msg string, isErr bool) (model, tea.Cmd) {
@@ -121,6 +172,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case []InboxEntry:
 		m.items = msg
 		m.loading = false
+		m.setSuggestionState()
 		return m, nil
 
 	case tagMsg:
@@ -216,10 +268,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			if m.focus == focusList && m.cursor > 0 {
 				m.cursor--
+				m.setSuggestionState()
 			}
 		case "down", "j":
 			if m.focus == focusList && m.cursor < len(m.items)-1 {
 				m.cursor++
+				m.setSuggestionState()
 			}
 
 		case "a":
@@ -248,8 +302,99 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case focusCancel:
 				return m, tea.Quit
 			default:
+				break
+			}
+		}
+
+		if m.focus == focusSuggested {
+			item, ok := m.selectedItem()
+			if !ok {
 				return m, nil
 			}
+
+			state := m.suggestions[item.Name]
+			if state == nil {
+				return m, nil
+			}
+
+			switch msg.String() {
+			case "up", "k":
+				state.cursorGroup--
+				if state.cursorGroup < -1 {
+					state.cursorGroup = len(state.options) - 1
+				}
+				state.cursorIdx = 0
+
+			case "down", "j":
+				state.cursorGroup++
+				if state.cursorGroup >= len(state.options) {
+					state.cursorGroup = -1
+				}
+				state.cursorIdx = 0
+
+			case "left", "h":
+				state.cursorIdx--
+				if state.cursorIdx < 0 {
+					state.cursorIdx = 0
+				}
+
+			case "right", "l":
+				state.cursorIdx++
+				maxIdx := 0
+				if state.cursorGroup == -1 && len(state.common) > 0 {
+					maxIdx = len(state.common) - 1
+				} else if state.cursorGroup >= 0 && state.cursorGroup < len(state.options) {
+					maxIdx = len(state.options[state.cursorGroup]) - 1
+				}
+				if state.cursorIdx > maxIdx {
+					state.cursorIdx = maxIdx
+				}
+
+			case "space":
+				if state.cursorGroup == -1 {
+					state.common[state.cursorIdx].selected = !state.common[state.cursorIdx].selected
+				} else if state.cursorGroup >= 0 {
+					if state.activeOpt != -1 && state.activeOpt != state.cursorGroup {
+						for i := range state.options[state.activeOpt] {
+							state.options[state.activeOpt][i].selected = false
+						}
+					}
+					state.activeOpt = state.cursorGroup
+					state.options[state.cursorGroup][state.cursorIdx].selected = !state.options[state.cursorGroup][state.cursorIdx].selected
+
+					hasActive := false
+					for _, t := range state.options[state.cursorGroup] {
+						if t.selected {
+							hasActive = true
+							break
+						}
+					}
+					if !hasActive {
+						state.activeOpt = -1
+					}
+				}
+
+			case "enter":
+				for _, t := range state.common {
+					if t.selected && !slices.Contains(m.pendingTags[item.Name], t.name) {
+						m.pendingTags[item.Name] = append(m.pendingTags[item.Name], t.name)
+					}
+				}
+				for _, group := range state.options {
+					for _, t := range group {
+						if t.selected && !slices.Contains(m.pendingTags[item.Name], t.name) {
+							m.pendingTags[item.Name] = append(m.pendingTags[item.Name], t.name)
+						}
+					}
+				}
+
+				sort.Strings(m.pendingTags[item.Name])
+				m.implicitPendingTags[item.Name], _ = getImplicitTags(m.socketPath, m.pendingTags[item.Name])
+				if m.cursor < len(m.items)-1 {
+					m.cursor++
+				}
+			}
+			return m, nil
 		}
 
 	case tea.MouseWheelMsg:
@@ -370,7 +515,39 @@ func (m model) detailPanel(width, height int) string {
 	}
 
 	b.WriteString("\n" + sectionLabelStyle.Render(iconMagic+" SUGGESTED TAGS") + "\n")
-	b.WriteString(emptyHintStyle.Render("waiting on the daemon to learn your tagging habits") + "\n\n")
+
+	state, hasSuggestions := m.suggestions[item.Name]
+	if !hasSuggestions {
+		b.WriteString(emptyHintStyle.Render("no suggestions available") + "\n\n")
+	} else {
+		if len(state.common) > 0 {
+			b.WriteString(rowDimStyle.Render("Common:") + "\n")
+			var chips []string
+			for i, tag := range state.common {
+				isFocused := m.focus == focusSuggested && state.cursorGroup == -1 && state.cursorIdx == i
+				chips = append(chips, renderChip(tag, isFocused, false))
+			}
+			b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, chips...) + "\n")
+		}
+
+		for gIdx, optGroup := range state.options {
+			isDisabled := state.activeOpt != -1 && state.activeOpt != gIdx
+
+			label := rowDimStyle
+			if isDisabled {
+				label = label.Faint(true)
+			}
+			b.WriteString(label.Render(fmt.Sprintf("Option %d:", gIdx+1)) + "\n")
+
+			var chips []string
+			for i, tag := range optGroup {
+				isFocused := m.focus == focusSuggested && state.cursorGroup == gIdx && state.cursorIdx == i
+				chips = append(chips, renderChip(tag, isFocused, isDisabled))
+			}
+			b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, chips...) + "\n")
+		}
+		b.WriteString("\n")
+	}
 
 	inputStyle := inputBoxStyle
 	if m.focus == focusTagInput {

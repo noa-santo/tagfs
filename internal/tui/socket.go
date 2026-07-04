@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/noa-santo/tagfs/internal/logic"
 	. "github.com/noa-santo/tagfs/internal/shared"
 )
 
@@ -143,4 +144,30 @@ func getImplicitTags(socketPath string, tags []string) ([]string, error) {
 		return nil, errors.New(fmt.Sprintf("Error reading from socket: %v", err))
 	}
 	return implicitTags, nil
+}
+
+func getSuggestions(socketPath string, filename string) (logic.TagSuggestion, error) {
+	conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
+	if err != nil {
+		return logic.TagSuggestion{}, errors.New(fmt.Sprintf("Error connecting to socket: %v", err))
+	}
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			fmt.Println("Error closing connection:", err)
+		}
+	}(conn)
+
+	_, err = conn.Write([]byte(fmt.Sprintf("GET_SUGGESTIONS\n%s\n", filename)))
+	if err != nil {
+		return logic.TagSuggestion{}, errors.New(fmt.Sprintf("Error writing to socket: %v", err))
+	}
+	var suggestions logic.TagSuggestion
+	if err := json.NewDecoder(conn).Decode(&suggestions); err != nil {
+		return logic.TagSuggestion{}, errors.New(fmt.Sprintf("Error reading from socket: %v", err))
+	}
+	if suggestions.Options[0] == nil {
+		suggestions.Options = make([][]string, 0)
+	}
+	return suggestions, nil
 }
