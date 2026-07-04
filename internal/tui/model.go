@@ -1,14 +1,10 @@
 package tui
 
 import (
-	"encoding/json"
 	"fmt"
-	"net"
 	"strings"
-	"time"
 
 	"charm.land/bubbles/v2/help"
-	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -25,123 +21,6 @@ const (
 	focusCancel
 	focusCount
 )
-
-const (
-	iconInbox   = "\uf01c"
-	iconFolder  = "\uf07b"
-	iconFile    = "\uf15b"
-	iconTag     = "\uf02b"
-	iconTags    = "\uf02c"
-	iconMagic   = "\uf0d0"
-	iconCheck   = "\uf00c"
-	iconCross   = "\uf00d"
-	iconPlus    = "\uf067"
-	iconChevron = "\uf054"
-	iconWarning = "\uf071"
-)
-
-var (
-	colorBase    = lipgloss.Color("#1e1e2e")
-	colorSurface = lipgloss.Color("#313244")
-	colorOverlay = lipgloss.Color("#6c7086")
-	colorText    = lipgloss.Color("#cdd6f4")
-	colorSubtext = lipgloss.Color("#a6adc8")
-	colorMauve   = lipgloss.Color("#cba6f7")
-	colorBlue    = lipgloss.Color("#89b4fa")
-	colorGreen   = lipgloss.Color("#a6e3a1")
-	colorRed     = lipgloss.Color("#f38ba8")
-	colorPeach   = lipgloss.Color("#fab387")
-
-	titleStyle = lipgloss.NewStyle().
-			Background(colorMauve).
-			Foreground(colorBase).
-			Bold(true).
-			Padding(0, 2)
-
-	subtitleStyle = lipgloss.NewStyle().Foreground(colorSubtext)
-	countStyle    = lipgloss.NewStyle().Foreground(colorOverlay)
-
-	dividerStyle = lipgloss.NewStyle().Foreground(colorSurface)
-
-	panelStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorSurface).
-			Padding(0, 1)
-
-	focusedPanelStyle = panelStyle.
-				BorderForeground(colorMauve)
-
-	panelTitleStyle = lipgloss.NewStyle().Foreground(colorMauve).Bold(true)
-
-	rowSelectedStyle = lipgloss.NewStyle().Foreground(colorBase).Background(colorMauve).Bold(true)
-	rowDirStyle      = lipgloss.NewStyle().Foreground(colorBlue)
-	rowFileStyle     = lipgloss.NewStyle().Foreground(colorText)
-	rowDimStyle      = lipgloss.NewStyle().Foreground(colorOverlay)
-
-	sectionLabelStyle = lipgloss.NewStyle().Foreground(colorSubtext).Bold(true)
-	emptyHintStyle    = lipgloss.NewStyle().Foreground(colorOverlay).Italic(true)
-
-	tagChipStyle = lipgloss.NewStyle().
-			Background(colorMauve).
-			Foreground(colorBase).
-			Bold(true).
-			Padding(0, 1).
-			MarginRight(1)
-
-	inputBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorSurface).
-			Padding(0, 1)
-
-	inputBoxFocusedStyle = inputBoxStyle.BorderForeground(colorPeach)
-
-	buttonStyle = lipgloss.NewStyle().
-			Foreground(colorSubtext).
-			Padding(0, 2).
-			MarginRight(2)
-
-	errStyle = lipgloss.NewStyle().Foreground(colorRed).Bold(true)
-)
-
-type itemsMsg []fuse.InboxEntry
-type errMsg error
-
-type keyMap struct {
-	Up       key.Binding
-	Down     key.Binding
-	Tab      key.Binding
-	ShiftTab key.Binding
-	AddTag   key.Binding
-	Confirm  key.Binding
-	Help     key.Binding
-	Quit     key.Binding
-}
-
-func defaultKeyMap() keyMap {
-	return keyMap{
-		Up:       key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
-		Down:     key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-		Tab:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next")),
-		ShiftTab: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "prev")),
-		AddTag:   key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add tag")),
-		Confirm:  key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm")),
-		Help:     key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		Quit:     key.NewBinding(key.WithKeys("esc", "ctrl+c"), key.WithHelp("esc", "quit")),
-	}
-}
-
-func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Tab, k.AddTag, k.Confirm, k.Help, k.Quit}
-}
-
-func (k keyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Up, k.Down},
-		{k.Tab, k.ShiftTab},
-		{k.AddTag, k.Confirm},
-		{k.Help, k.Quit},
-	}
-}
 
 type model struct {
 	socketPath  string
@@ -186,34 +65,8 @@ func initialModel(socketPath string) model {
 	}
 }
 
-func (m model) fetchInboxItems(socketPath string) tea.Cmd {
-	return func() tea.Msg {
-		conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
-		if err != nil {
-			return errMsg(err)
-		}
-		defer func(conn net.Conn) {
-			err := conn.Close()
-			if err != nil {
-				fmt.Println("Error closing connection:", err)
-			}
-		}(conn)
-
-		if _, err := conn.Write([]byte("LIST_INBOX\n")); err != nil {
-			return errMsg(err)
-		}
-
-		var items itemsMsg
-		if err := json.NewDecoder(conn).Decode(&items); err != nil {
-			return errMsg(err)
-		}
-
-		return items
-	}
-}
-
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.fetchInboxItems(m.socketPath), m.spinner.Tick)
+	return tea.Batch(fetchInboxItems(m.socketPath), m.spinner.Tick)
 }
 
 func (m model) selectedItem() (fuse.InboxEntry, bool) {
@@ -232,12 +85,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.help.SetWidth(msg.Width)
 		return m, nil
 
-	case itemsMsg:
+	case []fuse.InboxEntry:
 		m.items = msg
 		m.loading = false
 		return m, nil
 
-	case errMsg:
+	case error:
 		m.err = msg
 		m.loading = false
 		return m, nil

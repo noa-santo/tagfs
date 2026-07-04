@@ -11,8 +11,9 @@ import (
 var inboxLogger = log.New(os.Stdout, "INBOX NODE: ", 0)
 
 type InboxEntry struct {
-	Name  string `json:"name"`
-	IsDir bool   `json:"is_dir"`
+	Name       string `json:"name"`
+	IsDir      bool   `json:"is_dir"`
+	ModifiedAt string `json:"created_at"`
 }
 
 type inboxNode struct {
@@ -42,9 +43,11 @@ func getInboxEntries() ([]InboxEntry, error) {
 	}
 	entries := make([]InboxEntry, len(dirEntries))
 	for i, entry := range dirEntries {
+		entryInfo, _ := entry.Info()
 		entries[i] = InboxEntry{
 			entry.Name(),
 			entry.IsDir(),
+			entryInfo.ModTime().Format("02.01.2006 15:04:05"),
 		}
 	}
 	return entries, nil
