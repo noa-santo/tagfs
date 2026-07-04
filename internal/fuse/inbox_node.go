@@ -9,11 +9,13 @@ import (
 )
 
 var inboxLogger = log.New(os.Stdout, "INBOX NODE: ", 0)
+var inboxInstance *inboxNode
 
 type InboxEntry struct {
 	Name       string `json:"name"`
 	IsDir      bool   `json:"is_dir"`
 	ModifiedAt string `json:"modified_at"`
+	Size       int64  `json:"size"`
 }
 
 type inboxNode struct {
@@ -38,7 +40,7 @@ func getInboxEntries() ([]InboxEntry, error) {
 	path := filepath.Join(config.Get().StoragePath, ".inbox")
 	dirEntries, err := os.ReadDir(path)
 	if err != nil {
-		inboxLogger.Fatalf("Error reading inbox: %v", err)
+		inboxLogger.Printf("Error reading inbox: %v", err)
 		return []InboxEntry{}, err
 	}
 	entries := make([]InboxEntry, len(dirEntries))
@@ -48,6 +50,7 @@ func getInboxEntries() ([]InboxEntry, error) {
 			entry.Name(),
 			entry.IsDir(),
 			entryInfo.ModTime().Format("02.01.2006 15:04:05"),
+			entryInfo.Size(),
 		}
 	}
 	return entries, nil

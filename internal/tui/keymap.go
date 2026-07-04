@@ -19,7 +19,7 @@ func defaultKeyMap() keyMap {
 		Down:     key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 		Tab:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next")),
 		ShiftTab: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "prev")),
-		AddTag:   key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add tag")),
+		AddTag:   key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "add tag")),
 		Confirm:  key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm")),
 		Help:     key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Quit:     key.NewBinding(key.WithKeys("esc", "ctrl+c"), key.WithHelp("esc", "quit")),

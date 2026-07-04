@@ -12,6 +12,21 @@ import (
 	"github.com/noa-santo/tagfs/internal/fuse"
 )
 
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	suffixes := []string{"B", "KB", "MB", "GB", "TB", "PB", "EB"}
+	value := float64(bytes)
+	i := 0
+	for value >= unit && i < len(suffixes)-1 {
+		value /= unit
+		i++
+	}
+	return fmt.Sprintf("%.1f %s", value, suffixes[i])
+}
+
 type focusArea int
 
 const (
@@ -265,7 +280,10 @@ func (m model) detailPanel(width, height int) string {
 
 	var info = kind
 	if item.ModifiedAt != "" {
-		info += " | Last modified: " + item.ModifiedAt
+		info += " | last modified: " + item.ModifiedAt
+	}
+	if item.Size != 0 {
+		info += " | size: " + formatBytes(item.Size)
 	}
 
 	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(colorText).Render(icon+"  "+item.Name) + "\n")
@@ -279,7 +297,7 @@ func (m model) detailPanel(width, height int) string {
 		}
 		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, chips...) + "\n")
 	} else {
-		b.WriteString(emptyHintStyle.Render("no tags yet — add one below") + "\n")
+		b.WriteString(emptyHintStyle.Render("no tags yet :p add one below") + "\n")
 	}
 
 	b.WriteString("\n" + sectionLabelStyle.Render(iconMagic+" SUGGESTED TAGS") + "\n")
