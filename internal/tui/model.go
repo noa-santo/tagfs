@@ -346,6 +346,9 @@ func (m model) detailPanel(width, height int) string {
 	if item.Size != 0 {
 		info += " | size: " + formatBytes(item.Size)
 	}
+	if !item.IsDir && item.MimeType != "" {
+		info += " | mime type: " + item.MimeType
+	}
 
 	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(colorText).Render(icon+"  "+item.Name) + "\n")
 	b.WriteString(rowDimStyle.Render(info) + "\n\n")

@@ -5,12 +5,13 @@ go 1.26.3
 require (
 	charm.land/bubbles/v2 v2.1.1
 	charm.land/bubbletea/v2 v2.0.8
+	charm.land/lipgloss/v2 v2.0.5
+	github.com/gabriel-vasile/mimetype v1.4.13
 	github.com/hanwen/go-fuse/v2 v2.10.1
 	github.com/spf13/cobra v1.10.2
 )
 
 require (
-	charm.land/lipgloss/v2 v2.0.5 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260703014108-f5a850f9c2b7 // indirect

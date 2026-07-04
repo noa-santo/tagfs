@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/noa-santo/tagfs/internal/config"
 )
 
@@ -15,6 +16,7 @@ type InboxEntry struct {
 	IsDir      bool   `json:"is_dir"`
 	ModifiedAt string `json:"modified_at"`
 	Size       int64  `json:"size"`
+	MimeType   string `json:"mime_type"`
 }
 
 type inboxNode struct {
@@ -45,11 +47,13 @@ func getInboxEntries() ([]InboxEntry, error) {
 	entries := make([]InboxEntry, len(dirEntries))
 	for i, entry := range dirEntries {
 		entryInfo, _ := entry.Info()
+		mimeType, _ := mimetype.DetectFile(filepath.Join(path, entry.Name()))
 		entries[i] = InboxEntry{
 			entry.Name(),
 			entry.IsDir(),
 			entryInfo.ModTime().Format("02.01.2006 15:04:05"),
 			entryInfo.Size(),
+			mimeType.String(),
 		}
 	}
 	return entries, nil
