@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/spinner"
@@ -14,22 +15,9 @@ import (
 	"github.com/noa-santo/tagfs/internal/fuse"
 )
 
-func formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	suffixes := []string{"B", "KB", "MB", "GB", "TB", "PB", "EB"}
-	value := float64(bytes)
-	i := 0
-	for value >= unit && i < len(suffixes)-1 {
-		value /= unit
-		i++
-	}
-	return fmt.Sprintf("%.1f %s", value, suffixes[i])
-}
-
 type tagMsg []string
+
+type clearToastMsg int
 
 type focusArea int
 
@@ -55,6 +43,9 @@ type model struct {
 	pendingTags map[string][]string
 	keys        keyMap
 	help        help.Model
+	toastMsg    string
+	toastIsErr  bool
+	toastID     int
 }
 
 func initialModel(socketPath string) model {
@@ -64,10 +55,10 @@ func initialModel(socketPath string) model {
 	)
 
 	ti := textinput.New()
-	ti.Placeholder = "type a tag and press enter"
+	ti.Placeholder = "type a tag and press enter (delete to remove)"
 	ti.CharLimit = 48
 	ti.ShowSuggestions = true
-	ti.SetWidth(32)
+	ti.SetWidth(48)
 
 	h := help.New()
 	h.Styles = help.DefaultStyles(true)
@@ -83,6 +74,20 @@ func initialModel(socketPath string) model {
 		keys:        defaultKeyMap(),
 		help:        h,
 	}
+}
+
+func (m model) showToast(msg string, isErr bool) (model, tea.Cmd) {
+	m.toastMsg = msg
+	m.toastIsErr = isErr
+	m.toastID++
+
+	currentID := m.toastID
+	cmd := func() tea.Msg {
+		time.Sleep(3 * time.Second)
+		return clearToastMsg(currentID)
+	}
+
+	return m, cmd
 }
 
 func (m model) Init() tea.Cmd {
@@ -103,6 +108,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.help.SetWidth(msg.Width)
+		return m, nil
+
+	case clearToastMsg:
+		if int(msg) == m.toastID {
+			m.toastMsg = ""
+		}
 		return m, nil
 
 	case []fuse.InboxEntry:
@@ -136,13 +147,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "enter":
 				if item, ok := m.selectedItem(); ok {
-					if tag := strings.TrimSpace(m.tagInput.CurrentSuggestion()); tag != "" && !slices.Contains(m.pendingTags[item.Name], tag) {
-						m.pendingTags[item.Name] = append(m.pendingTags[item.Name], tag)
+					tag := strings.TrimSpace(m.tagInput.CurrentSuggestion())
+					if tag == "" && m.tagInput.Value() != "" {
+						return m.showToast("tag has to be valid", true)
 					}
+					if slices.Contains(m.pendingTags[item.Name], tag) {
+						return m.showToast(fmt.Sprintf("Tag '%s' already exists", tag), true)
+					}
+					m.pendingTags[item.Name] = append(m.pendingTags[item.Name], tag)
 					m.tagInput.SetValue("")
 					sort.Strings(m.pendingTags[item.Name])
 				}
-				return m, nil
+
+			case "delete":
+				if m.tagInput.CurrentSuggestion() != "" {
+					if item, ok := m.selectedItem(); ok {
+						if !slices.Contains(m.pendingTags[item.Name], m.tagInput.CurrentSuggestion()) {
+							return m.showToast("tag is not pending so it cannot be removed", true)
+						}
+						m.pendingTags[item.Name] = remove(m.pendingTags[item.Name], m.tagInput.CurrentSuggestion())
+					}
+				}
+
 			case "tab":
 				m.tagInput.Blur()
 				m.focus = focusApply
@@ -348,7 +374,24 @@ func (m model) footerView() string {
 	buttons := lipgloss.JoinHorizontal(lipgloss.Top, addBtn, applyBtn, cancelBtn)
 	helpLine := m.help.View(m.keys)
 
-	return lipgloss.JoinVertical(lipgloss.Left, div, buttons, helpLine)
+	bottomRow := helpLine
+	if m.toastMsg != "" {
+		style := toastInfoStyle
+		icon := iconInfo
+		if m.toastIsErr {
+			style = toastErrStyle
+			icon = iconWarning
+		}
+		toastView := style.Render(icon + " " + m.toastMsg)
+
+		gap := m.width - lipgloss.Width(helpLine) - lipgloss.Width(toastView)
+		if gap > 0 {
+			bottomRow += strings.Repeat(" ", gap)
+		}
+		bottomRow += toastView
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, div, buttons, bottomRow)
 }
 
 func (m model) View() tea.View {

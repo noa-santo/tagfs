@@ -14,6 +14,7 @@ const (
 	iconPlus    = "\uf067"
 	iconChevron = "\uf054"
 	iconWarning = "\uf071"
+	iconInfo    = "\uf129"
 )
 
 var (
@@ -77,4 +78,8 @@ var (
 			MarginRight(2)
 
 	errStyle = lipgloss.NewStyle().Foreground(colorRed).Bold(true)
+
+	toastBaseStyle = lipgloss.NewStyle().Padding(0, 1)
+	toastErrStyle  = toastBaseStyle.Background(colorRed).Foreground(colorBase).Bold(true)
+	toastInfoStyle = toastBaseStyle.Background(colorBlue).Foreground(colorBase).Bold(true)
 )
