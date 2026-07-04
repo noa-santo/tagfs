@@ -9,7 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/noa-santo/tagfs/internal/fuse"
+	. "github.com/noa-santo/tagfs/internal/shared"
 )
 
 func testSocket(socketPath string) {
@@ -56,7 +56,7 @@ func fetchInboxItems(socketPath string) tea.Cmd {
 			return err
 		}
 
-		var items []fuse.InboxEntry
+		var items []InboxEntry
 		if err := json.NewDecoder(conn).Decode(&items); err != nil {
 			return err
 		}

@@ -12,7 +12,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/noa-santo/tagfs/internal/fuse"
+	. "github.com/noa-santo/tagfs/internal/shared"
 )
 
 type tagMsg []string
@@ -31,7 +31,7 @@ const (
 
 type model struct {
 	socketPath          string
-	items               []fuse.InboxEntry
+	items               []InboxEntry
 	cursor              int
 	focus               focusArea
 	err                 error
@@ -66,7 +66,7 @@ func initialModel(socketPath string) model {
 
 	return model{
 		socketPath:          socketPath,
-		items:               []fuse.InboxEntry{},
+		items:               []InboxEntry{},
 		loading:             true,
 		focus:               focusList,
 		spinner:             sp,
@@ -96,9 +96,9 @@ func (m model) Init() tea.Cmd {
 	return tea.Batch(fetchInboxItems(m.socketPath), fetchTags(m.socketPath), m.spinner.Tick)
 }
 
-func (m model) selectedItem() (fuse.InboxEntry, bool) {
+func (m model) selectedItem() (InboxEntry, bool) {
 	if m.cursor < 0 || m.cursor >= len(m.items) {
-		return fuse.InboxEntry{}, false
+		return InboxEntry{}, false
 	}
 	return m.items[m.cursor], true
 }
@@ -118,7 +118,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case []fuse.InboxEntry:
+	case []InboxEntry:
 		m.items = msg
 		m.loading = false
 		return m, nil

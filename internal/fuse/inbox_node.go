@@ -7,17 +7,10 @@ import (
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/noa-santo/tagfs/internal/config"
+	. "github.com/noa-santo/tagfs/internal/shared"
 )
 
 var inboxLogger = log.New(os.Stdout, "INBOX NODE: ", 0)
-
-type InboxEntry struct {
-	Name       string `json:"name"`
-	IsDir      bool   `json:"is_dir"`
-	ModifiedAt string `json:"modified_at"`
-	Size       int64  `json:"size"`
-	MimeType   string `json:"mime_type"`
-}
 
 type inboxNode struct {
 	passthroughNode
@@ -49,12 +42,33 @@ func getInboxEntries() ([]InboxEntry, error) {
 		entryInfo, _ := entry.Info()
 		mimeType, _ := mimetype.DetectFile(filepath.Join(path, entry.Name()))
 		entries[i] = InboxEntry{
-			entry.Name(),
-			entry.IsDir(),
-			entryInfo.ModTime().Format("02.01.2006 15:04:05"),
-			entryInfo.Size(),
-			mimeType.String(),
+			Name:       entry.Name(),
+			IsDir:      entry.IsDir(),
+			ModifiedAt: entryInfo.ModTime().Format("02.01.2006 15:04:05"),
+			Size:       entryInfo.Size(),
+			MimeType:   mimeType.String(),
 		}
 	}
 	return entries, nil
+}
+
+func getInboxEntry(filename string) (InboxEntry, error) {
+	path := filepath.Join(config.Get().StoragePath, ".inbox", filename)
+	entryInfo, err := os.Stat(path)
+	if err != nil {
+		inboxLogger.Printf("Error reading inbox: %v", err)
+		return InboxEntry{}, err
+	}
+	mimeType, err := mimetype.DetectFile(path)
+	if err != nil {
+		inboxLogger.Printf("Error detecting mime type: %v", err)
+		return InboxEntry{}, err
+	}
+	return InboxEntry{
+		Name:       filename,
+		IsDir:      entryInfo.IsDir(),
+		ModifiedAt: entryInfo.ModTime().Format("02.01.2006 15:04:05"),
+		Size:       entryInfo.Size(),
+		MimeType:   mimeType.String(),
+	}, nil
 }

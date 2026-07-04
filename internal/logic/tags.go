@@ -1,10 +1,13 @@
-package config
+package logic
 
-func (c Config) GetAllTags() []string {
+import "github.com/noa-santo/tagfs/internal/config"
+
+func GetAllTags() []string {
+	c := config.Get()
 	uniqueTags := make(map[string]struct{})
 
 	for _, dir := range c.Directories {
-		c.collectTags(dir, uniqueTags)
+		collectTags(dir, uniqueTags)
 	}
 
 	tags := make([]string, 0, len(uniqueTags))
@@ -15,7 +18,7 @@ func (c Config) GetAllTags() []string {
 	return tags
 }
 
-func (c Config) collectTags(dir DirectoryConfig, uniqueTags map[string]struct{}) {
+func collectTags(dir config.DirectoryConfig, uniqueTags map[string]struct{}) {
 	for _, tag := range dir.Tags {
 		if tag != "" {
 			uniqueTags[tag] = struct{}{}
@@ -23,17 +26,17 @@ func (c Config) collectTags(dir DirectoryConfig, uniqueTags map[string]struct{})
 	}
 
 	for _, subDir := range dir.Subdirectories {
-		c.collectTags(subDir, uniqueTags)
+		collectTags(subDir, uniqueTags)
 	}
 }
 
-func (c Config) IsTagCompatible(newTag string, existingTags []string) bool {
+func IsTagCompatible(newTag string, existingTags []string) bool {
 	requiredTags := make(map[string]struct{})
 	for _, t := range existingTags {
 		requiredTags[t] = struct{}{}
 	}
 	requiredTags[newTag] = struct{}{}
-	effectiveDirs := c.getEffectiveDirs()
+	effectiveDirs := getEffectiveDirs()
 	for _, dir := range effectiveDirs {
 		isValidForDir := true
 		for reqTag := range requiredTags {
@@ -50,7 +53,7 @@ func (c Config) IsTagCompatible(newTag string, existingTags []string) bool {
 	return false
 }
 
-func (c Config) GetImplicitTags(tags []string) []string {
+func GetImplicitTags(tags []string) []string {
 	if len(tags) == 0 {
 		return nil
 	}
@@ -60,7 +63,7 @@ func (c Config) GetImplicitTags(tags []string) []string {
 		requiredTags[t] = struct{}{}
 	}
 
-	effectiveDirs := c.getEffectiveDirs()
+	effectiveDirs := getEffectiveDirs()
 	var validDestinations []EffectiveDir
 
 	for _, dir := range effectiveDirs {

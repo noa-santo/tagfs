@@ -1,19 +1,22 @@
-package config
+package logic
+
+import "github.com/noa-santo/tagfs/internal/config"
 
 type EffectiveDir struct {
 	Path string
 	Tags map[string]struct{}
 }
 
-func (c Config) getEffectiveDirs() []EffectiveDir {
+func getEffectiveDirs() []EffectiveDir {
+	c := config.Get()
 	var result []EffectiveDir
 	for _, dir := range c.Directories {
-		c.flattenDirs(dir, "", make(map[string]struct{}), &result)
+		flattenDirs(dir, "", make(map[string]struct{}), &result)
 	}
 	return result
 }
 
-func (c Config) flattenDirs(dir DirectoryConfig, parentPath string, parentTags map[string]struct{}, result *[]EffectiveDir) {
+func flattenDirs(dir config.DirectoryConfig, parentPath string, parentTags map[string]struct{}, result *[]EffectiveDir) {
 	currentPath := dir.Name
 	if parentPath != "" {
 		currentPath = parentPath + "/" + dir.Name
@@ -36,6 +39,6 @@ func (c Config) flattenDirs(dir DirectoryConfig, parentPath string, parentTags m
 	})
 
 	for _, subDir := range dir.Subdirectories {
-		c.flattenDirs(subDir, currentPath, currentTags, result)
+		flattenDirs(subDir, currentPath, currentTags, result)
 	}
 }

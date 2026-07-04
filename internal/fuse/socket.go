@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/noa-santo/tagfs/internal/config"
+	"github.com/noa-santo/tagfs/internal/logic"
 )
 
 func removeIfExist(path string) {
@@ -70,7 +70,7 @@ func handleListInbox(conn net.Conn) {
 }
 
 func handleListTags(conn net.Conn) {
-	tags := config.Get().GetAllTags()
+	tags := logic.GetAllTags()
 	tags = append(tags, "overwrite")
 	if err := json.NewEncoder(conn).Encode(tags); err != nil {
 		logger.Printf("Error writing tags: %v", err)
@@ -95,7 +95,7 @@ func handleCheckTagCompatibility(conn net.Conn, reader *bufio.Reader) {
 		return
 	}
 	newTag := strings.TrimSpace(strings.TrimSuffix(newTagRaw, "\n"))
-	if err = json.NewEncoder(conn).Encode(config.Get().IsTagCompatible(newTag, existingTags)); err != nil {
+	if err = json.NewEncoder(conn).Encode(logic.IsTagCompatible(newTag, existingTags)); err != nil {
 		logger.Printf("Error writing compatibility: %v", err)
 		return
 	}
@@ -112,9 +112,28 @@ func handleGetImplicitTags(conn net.Conn, reader *bufio.Reader) {
 		logger.Printf("Error unmarshalling existing tags: %v", err)
 		return
 	}
-	if err = json.NewEncoder(conn).Encode(config.Get().GetImplicitTags(tags)); err != nil {
+	if err = json.NewEncoder(conn).Encode(logic.GetImplicitTags(tags)); err != nil {
 		logger.Printf("Error writing implicit tags: %v", err)
 		return
+	}
+}
+
+func handleGetSuggestions(conn net.Conn, reader *bufio.Reader) {
+	fileNameString, err := reader.ReadString('\n')
+	if err != nil {
+		logger.Printf("Error reading file name: %v", err)
+		return
+	}
+	fileName := strings.TrimSuffix(fileNameString, "\n")
+	entry, err := getInboxEntry(fileName)
+	if err != nil {
+		logger.Printf("Error reading inbox entry: %v", err)
+		return
+	}
+	tagSuggestion := logic.SuggestTags(entry)
+	err = json.NewEncoder(conn).Encode(tagSuggestion)
+	if err != nil {
+		logger.Printf("Error writing suggestions: %v", err)
 	}
 }
 
@@ -147,6 +166,9 @@ func handleConnection(conn net.Conn) {
 		break
 	case "GET_IMPLICIT_TAGS\n":
 		handleGetImplicitTags(conn, reader)
+		break
+	case "GET_SUGGESTIONS\n":
+		handleGetSuggestions(conn, reader)
 		break
 	default:
 		logger.Printf("Unknown command: %s", cmd)
