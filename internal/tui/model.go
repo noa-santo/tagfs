@@ -263,8 +263,13 @@ func (m model) detailPanel(width, height int) string {
 		kind = "DIRECTORY"
 	}
 
+	var info = kind
+	if item.ModifiedAt != "" {
+		info += " | Last modified: " + item.ModifiedAt
+	}
+
 	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(colorText).Render(icon+"  "+item.Name) + "\n")
-	b.WriteString(rowDimStyle.Render(kind) + "\n\n")
+	b.WriteString(rowDimStyle.Render(info) + "\n\n")
 
 	b.WriteString(sectionLabelStyle.Render(iconTags+" PENDING TAGS") + "\n")
 	if tags := m.pendingTags[item.Name]; len(tags) > 0 {

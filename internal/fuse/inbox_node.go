@@ -13,7 +13,7 @@ var inboxLogger = log.New(os.Stdout, "INBOX NODE: ", 0)
 type InboxEntry struct {
 	Name       string `json:"name"`
 	IsDir      bool   `json:"is_dir"`
-	ModifiedAt string `json:"created_at"`
+	ModifiedAt string `json:"modified_at"`
 }
 
 type inboxNode struct {
