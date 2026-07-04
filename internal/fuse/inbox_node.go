@@ -9,7 +9,6 @@ import (
 )
 
 var inboxLogger = log.New(os.Stdout, "INBOX NODE: ", 0)
-var inboxInstance *inboxNode
 
 type InboxEntry struct {
 	Name       string `json:"name"`

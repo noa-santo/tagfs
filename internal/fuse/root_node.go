@@ -20,8 +20,13 @@ type rootNode struct {
 }
 
 func (n *rootNode) init(ctx context.Context) {
+	rootLogger.Printf("Initializing passthrough directories...")
 	n.initPassthrough(ctx)
+	rootLogger.Printf("Initializing inbox...")
 	n.initInbox(ctx)
+	rootLogger.Printf("Initializing dynamic directories...")
+	n.initDynamicDirectories(ctx, &n.Inode, config.Get().StoragePath, config.Get().Directories)
+	rootLogger.Printf("Initialization complete")
 }
 
 func (n *rootNode) initPassthrough(ctx context.Context) {
@@ -37,6 +42,24 @@ func (n *rootNode) initInbox(ctx context.Context) {
 	n.inboxNode = newInboxNode()
 	childINode := n.NewPersistentInode(ctx, n.inboxNode, fs.StableAttr{Mode: syscall.S_IFDIR})
 	n.AddChild(config.Get().InboxDir, childINode, true)
+}
+
+func (n *rootNode) initDynamicDirectories(ctx context.Context, parentInode *fs.Inode, parentPath string, dirConfigs []config.DirectoryConfig) {
+	for _, dirConf := range dirConfigs {
+		dirPath := filepath.Join(parentPath, dirConf.Name)
+		if err := os.MkdirAll(dirPath, 0755); err != nil {
+			rootLogger.Printf("Warning: Failed to create storage directory %s: %v", dirPath, err)
+		}
+		childNode := &dynamicDirectoryNode{
+			passthroughNode: passthroughNode{Path: dirPath},
+			nodeConfig:      dirConf,
+		}
+		childInode := parentInode.NewPersistentInode(ctx, childNode, fs.StableAttr{Mode: syscall.S_IFDIR})
+		parentInode.AddChild(dirConf.Name, childInode, true)
+		if len(dirConf.Subdirectories) > 0 {
+			n.initDynamicDirectories(ctx, childInode, dirPath, dirConf.Subdirectories)
+		}
+	}
 }
 
 func (n *rootNode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
