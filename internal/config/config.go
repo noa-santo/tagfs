@@ -15,11 +15,30 @@ var (
 	loaded    bool
 )
 
+type Rules struct {
+	MimeTypes           []string `json:"mime_types"`
+	ForceMimeTypes      bool     `json:"force_mime_types"`
+	NamePatterns        []string `json:"name_patterns"`
+	ForceNamePattern    bool     `json:"force_name_pattern"`
+	AllowSubdirCreation bool     `json:"allow_subdir_creation"`
+	AllowFileCreation   bool     `json:"allow_file_creation"`
+}
+
+type DirectoryConfig struct {
+	Name           string            `json:"name"`
+	Description    string            `json:"description"`
+	Tags           []string          `json:"tags"`
+	Rules          Rules             `json:"rules"`
+	Subdirectories []DirectoryConfig `json:"subdirectories,omitempty"`
+	Volatile       bool              `json:"dangerous_volatile"`
+}
+
 type Config struct {
-	MountPath       string   `json:"mount_path"`
-	StoragePath     string   `json:"storage_path"`
-	PassthroughDirs []string `json:"passthrough_dirs"`
-	InboxDir        string   `json:"inbox_dir"`
+	MountPath       string            `json:"mount_path"`
+	StoragePath     string            `json:"storage_path"`
+	PassthroughDirs []string          `json:"passthrough_dirs"`
+	InboxDir        string            `json:"inbox_dir"`
+	Directories     []DirectoryConfig `json:"directories"`
 }
 
 func InitConfig(path string) error {

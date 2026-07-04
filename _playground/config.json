@@ -2,5 +2,158 @@
   "mount_path": "/home/owo/Projects/tagfs/_playground/mnt",
   "storage_path": "/home/owo/Projects/tagfs/_playground/storage",
   "passthrough_dirs": [".config", ".passthrough"],
-  "inbox_dir": "Inbox"
+  "inbox_dir": "Inbox",
+  "directories": [
+    {
+      "name": "Documents",
+      "description": "Place for documents",
+      "tags": ["documents", "pdf"],
+      "dangerous_volatile": false,
+      "rules": {
+        "mime_types": [
+          "application/pdf",
+          "text/plain",
+          "text/markdown",
+          "application/rtf",
+          "application/msword",
+          "application/vnd.ms-excel",
+          "application/vnd.ms-powerpoint",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "application/vnd.oasis.opendocument.text",
+          "application/vnd.oasis.opendocument.spreadsheet",
+          "application/vnd.oasis.opendocument.presentation",
+          "application/x-latex",
+          "text/x-tex"
+        ],
+        "force_mime_types": true,
+        "name_patterns": [],
+        "force_name_pattern": false,
+        "allow_subdir_creation": false,
+        "allow_file_creation": true
+      },
+      "subdirectories": [
+        {
+          "name": "TUM",
+          "description": "Documents related to the TUM",
+          "tags": ["uni", "tum"],
+          "dangerous_volatile": false,
+          "rules": {
+            "mime_types": [],
+            "force_mime_types": true,
+            "name_patterns": [],
+            "force_name_pattern": false,
+            "allow_subdir_creation": true,
+            "allow_file_creation": true
+          }
+        },
+        {
+          "name": "Archive",
+          "description": "Old files that could possibly be needed in the future",
+          "tags": ["archive", "old"],
+          "dangerous_volatile": false,
+          "rules": {
+            "mime_types": [],
+            "force_mime_types": true,
+            "name_patterns": [],
+            "force_name_pattern": false,
+            "allow_subdir_creation": true,
+            "allow_file_creation": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "Downloads",
+      "description": "Web downloads and temporary incoming files",
+      "tags": ["download", "incoming"],
+      "dangerous_volatile": false,
+      "rules": {
+        "mime_types": [],
+        "force_mime_types": false,
+        "name_patterns": [],
+        "force_name_pattern": false,
+        "allow_subdir_creation": true,
+        "allow_file_creation": true
+      }
+    },
+    {
+      "name": "Pictures",
+      "description": "Photos, wallpapers, and graphic assets",
+      "tags": ["images", "photos", "media"],
+      "dangerous_volatile": false,
+      "rules": {
+        "mime_types": ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml", "image/avif"],
+        "force_mime_types": true,
+        "name_patterns": [],
+        "force_name_pattern": false,
+        "allow_subdir_creation": true,
+        "allow_file_creation": true
+      }
+    },
+    {
+      "name": "Music",
+      "description": "Audio tracks, albums, and playlists",
+      "tags": ["audio", "music", "media"],
+      "dangerous_volatile": false,
+      "rules": {
+        "mime_types": ["audio/mpeg", "audio/ogg", "audio/wav", "audio/flac", "audio/aac", "audio/mp4"],
+        "force_mime_types": true,
+        "name_patterns": [],
+        "force_name_pattern": false,
+        "allow_subdir_creation": true,
+        "allow_file_creation": true
+      }
+    },
+    {
+      "name": "Videos",
+      "description": "Movies, screen recordings, and video clips",
+      "tags": ["video", "movies", "media"],
+      "dangerous_volatile": false,
+      "rules": {
+        "mime_types": ["video/mp4", "video/x-matroska", "video/webm", "video/quicktime"],
+        "force_mime_types": true,
+        "name_patterns": [],
+        "force_name_pattern": false,
+        "allow_subdir_creation": true,
+        "allow_file_creation": true
+      }
+    },
+    {
+      "name": "Projects",
+      "description": "Code repositories, scripts, and software projects",
+      "tags": ["code", "dev", "projects"],
+      "dangerous_volatile": false,
+      "rules": {
+        "mime_types": ["text/plain", "application/json", "application/javascript", "text/html", "text/css"],
+        "force_mime_types": false,
+        "name_patterns": [],
+        "force_name_pattern": false,
+        "allow_subdir_creation": true,
+        "allow_file_creation": false
+      }
+    },
+    {
+      "name": "tmp",
+      "description": "Temporary files",
+      "tags": [
+        "volatile",
+        "tmp",
+        "temp"
+      ],
+      "dangerous_volatile": true,
+      "rules": {
+        "mime_types": [],
+        "force_mime_types": false,
+        "name_patterns": [
+          "^tmp\\w*",
+          "\\w*\\.tmp$"
+        ],
+        "force_name_pattern": false,
+        "allow_subdir_creation": true,
+        "allow_file_creation": true
+      }
+    }
+  ]
 }
