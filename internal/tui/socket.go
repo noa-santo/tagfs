@@ -117,3 +117,30 @@ func isTagCompatible(socketPath string, newTag string, existingTags []string) (b
 	}
 	return isCompatible, nil
 }
+
+func getImplicitTags(socketPath string, tags []string) ([]string, error) {
+	conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Error connecting to socket: %v", err))
+	}
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			fmt.Println("Error closing connection:", err)
+		}
+	}(conn)
+
+	tagsString, err := json.Marshal(tags)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Error marshalling existing tags: %v", err))
+	}
+	_, err = conn.Write([]byte(fmt.Sprintf("GET_IMPLICIT_TAGS\n%s\n", tagsString)))
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Error writing to socket: %v", err))
+	}
+	var implicitTags []string
+	if err := json.NewDecoder(conn).Decode(&implicitTags); err != nil {
+		return nil, errors.New(fmt.Sprintf("Error reading from socket: %v", err))
+	}
+	return implicitTags, nil
+}

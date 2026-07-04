@@ -64,6 +64,7 @@ var (
 			Bold(true).
 			Padding(0, 1).
 			MarginRight(1)
+	implicitTagChipStyle = tagChipStyle.Background(colorOverlay)
 
 	inputBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).

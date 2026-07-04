@@ -30,22 +30,23 @@ const (
 )
 
 type model struct {
-	socketPath  string
-	items       []fuse.InboxEntry
-	cursor      int
-	focus       focusArea
-	err         error
-	loading     bool
-	width       int
-	height      int
-	spinner     spinner.Model
-	tagInput    textinput.Model
-	pendingTags map[string][]string
-	keys        keyMap
-	help        help.Model
-	toastMsg    string
-	toastIsErr  bool
-	toastID     int
+	socketPath          string
+	items               []fuse.InboxEntry
+	cursor              int
+	focus               focusArea
+	err                 error
+	loading             bool
+	width               int
+	height              int
+	spinner             spinner.Model
+	tagInput            textinput.Model
+	pendingTags         map[string][]string
+	implicitPendingTags map[string][]string
+	keys                keyMap
+	help                help.Model
+	toastMsg            string
+	toastIsErr          bool
+	toastID             int
 }
 
 func initialModel(socketPath string) model {
@@ -64,15 +65,16 @@ func initialModel(socketPath string) model {
 	h.Styles = help.DefaultStyles(true)
 
 	return model{
-		socketPath:  socketPath,
-		items:       []fuse.InboxEntry{},
-		loading:     true,
-		focus:       focusList,
-		spinner:     sp,
-		tagInput:    ti,
-		pendingTags: make(map[string][]string),
-		keys:        defaultKeyMap(),
-		help:        h,
+		socketPath:          socketPath,
+		items:               []fuse.InboxEntry{},
+		loading:             true,
+		focus:               focusList,
+		spinner:             sp,
+		tagInput:            ti,
+		pendingTags:         make(map[string][]string),
+		implicitPendingTags: make(map[string][]string),
+		keys:                defaultKeyMap(),
+		help:                h,
 	}
 }
 
@@ -169,6 +171,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.pendingTags[item.Name] = append(m.pendingTags[item.Name], tag)
 					m.tagInput.SetValue("")
 					sort.Strings(m.pendingTags[item.Name])
+					var err error
+					m.implicitPendingTags[item.Name], err = getImplicitTags(m.socketPath, m.pendingTags[item.Name])
+					if err != nil {
+						return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
+					}
 				}
 
 			case "delete":
@@ -178,6 +185,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							return m.showToast("tag is not pending so it cannot be removed", true)
 						}
 						m.pendingTags[item.Name] = remove(m.pendingTags[item.Name], m.tagInput.CurrentSuggestion())
+						var err error
+						m.implicitPendingTags[item.Name], err = getImplicitTags(m.socketPath, m.pendingTags[item.Name])
+						if err != nil {
+							return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
+						}
 					}
 				}
 
@@ -343,6 +355,11 @@ func (m model) detailPanel(width, height int) string {
 		chips := make([]string, len(tags))
 		for i, t := range tags {
 			chips[i] = tagChipStyle.Render(iconTag + " " + t)
+		}
+		if implicitTags := m.implicitPendingTags[item.Name]; len(implicitTags) > 0 {
+			for _, t := range implicitTags {
+				chips = append(chips, implicitTagChipStyle.Render(iconMagic+" "+t))
+			}
 		}
 		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, chips...) + "\n")
 	} else {

@@ -80,12 +80,14 @@ func (c Config) GetImplicitTags(tags []string) []string {
 	if len(validDestinations) == 1 {
 		targetDir := validDestinations[0]
 
-		fullTags := make([]string, 0, len(targetDir.Tags))
+		var implicitTags []string
 		for tag := range targetDir.Tags {
-			fullTags = append(fullTags, tag)
+			if _, isOriginal := requiredTags[tag]; !isOriginal {
+				implicitTags = append(implicitTags, tag)
+			}
 		}
 
-		return fullTags
+		return implicitTags
 	}
 
 	return nil
