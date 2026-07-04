@@ -9,18 +9,23 @@ import (
 	"syscall"
 )
 
+func removeIfExist(path string) {
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return
+	}
+	err = os.Remove(path)
+	if err != nil {
+		logger.Fatalf("Failed to remove socket: %v", err)
+	}
+}
+
 func startCommandListener() {
 	socketPath := os.Getenv("TAGFS_SOCKET")
 	if socketPath == "" {
 		logger.Panicf("Socket path was not initialized! Set it at build time!")
 	}
-	_, err := os.Stat(socketPath)
-	if !os.IsNotExist(err) {
-		err := os.Remove(socketPath)
-		if err != nil {
-			logger.Fatalf("Failed to remove old socket!")
-		}
-	}
+	removeIfExist(socketPath)
 	l, err := net.Listen("unix", socketPath)
 	if err != nil {
 		logger.Fatalf("Failed to listen on socket: %v", err)
@@ -36,10 +41,7 @@ func startCommandListener() {
 		if err != nil {
 			logger.Fatalf("Failed to close socket: %v", err)
 		}
-		err = os.Remove(socketPath)
-		if err != nil {
-			logger.Fatalf("Failed to remove socket: %v", err)
-		}
+		removeIfExist(socketPath)
 	}()
 
 	for {
