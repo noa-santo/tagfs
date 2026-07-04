@@ -151,6 +151,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if tag == "" && m.tagInput.Value() != "" {
 						return m.showToast("tag has to be valid", true)
 					}
+					if tag == "" {
+						return m.showToast("tag cannot be empty", true)
+					}
 					if slices.Contains(m.pendingTags[item.Name], tag) {
 						return m.showToast(fmt.Sprintf("Tag '%s' already exists", tag), true)
 					}
@@ -173,6 +176,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.tagInput.Blur()
 				m.focus = focusApply
 				return m, nil
+			case "shift+tab":
+				m.tagInput.Blur()
+				m.focus = focusList
+				return m, nil
 			}
 			var cmd tea.Cmd
 			m.tagInput, cmd = m.tagInput.Update(msg)
@@ -180,14 +187,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch msg.String() {
-		case "ctrl+c", "esc":
-			return m, tea.Quit
-		case "q":
+		case "ctrl+c", "esc", "q":
 			return m, tea.Quit
 		case "?":
 			m.help.ShowAll = !m.help.ShowAll
 			return m, nil
-
 		case "up", "k":
 			if m.focus == focusList && m.cursor > 0 {
 				m.cursor--
@@ -343,7 +347,7 @@ func (m model) detailPanel(width, height int) string {
 	if m.focus == focusTagInput {
 		inputStyle = inputBoxFocusedStyle
 	}
-	b.WriteString(sectionLabelStyle.Render(iconPlus+" ADD TAG") + "\n")
+	b.WriteString(sectionLabelStyle.Render(iconPlus+" ADD/REMOVE TAG") + "\n")
 	b.WriteString(inputStyle.Width(width - 6).Render(m.tagInput.View()))
 
 	style := panelStyle
@@ -356,13 +360,10 @@ func (m model) detailPanel(width, height int) string {
 func (m model) footerView() string {
 	div := dividerStyle.Render(strings.Repeat("─", max(m.width, 0)))
 
-	addBtn := buttonStyle.Render(iconPlus + " Add Tag")
 	applyBtn := buttonStyle.Foreground(colorGreen).Render(iconCheck + " Apply")
 	cancelBtn := buttonStyle.Foreground(colorRed).MarginRight(0).Render(iconCross + " Cancel")
 
 	switch m.focus {
-	case focusTagInput:
-		addBtn = buttonStyle.Background(colorPeach).Foreground(colorBase).Bold(true).Render(iconPlus + " Add Tag")
 	case focusApply:
 		applyBtn = buttonStyle.Background(colorGreen).Foreground(colorBase).Bold(true).Render(iconCheck + " Apply")
 	case focusCancel:
@@ -371,7 +372,7 @@ func (m model) footerView() string {
 		break
 	}
 
-	buttons := lipgloss.JoinHorizontal(lipgloss.Top, addBtn, applyBtn, cancelBtn)
+	buttons := lipgloss.JoinHorizontal(lipgloss.Top, applyBtn, cancelBtn)
 	helpLine := m.help.View(m.keys)
 
 	bottomRow := helpLine
