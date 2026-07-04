@@ -10,6 +10,11 @@ import (
 
 var inboxLogger = log.New(os.Stdout, "INBOX NODE: ", 0)
 
+type InboxEntry struct {
+	Name  string `json:"name"`
+	IsDir bool   `json:"is_dir"`
+}
+
 type inboxNode struct {
 	passthroughNode
 }
@@ -26,4 +31,21 @@ func newInboxNode() *inboxNode {
 			Path: path,
 		},
 	}
+}
+
+func getInboxEntries() ([]InboxEntry, error) {
+	path := filepath.Join(config.Get().StoragePath, ".inbox")
+	dirEntries, err := os.ReadDir(path)
+	if err != nil {
+		inboxLogger.Fatalf("Error reading inbox: %v", err)
+		return []InboxEntry{}, err
+	}
+	entries := make([]InboxEntry, len(dirEntries))
+	for i, entry := range dirEntries {
+		entries[i] = InboxEntry{
+			entry.Name(),
+			entry.IsDir(),
+		}
+	}
+	return entries, nil
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/noa-santo/tagfs/internal/config"
 	"github.com/noa-santo/tagfs/internal/fuse"
+	"github.com/noa-santo/tagfs/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +38,7 @@ func main() {
 		Short: "Starts the management TUI",
 		Run: func(cmd *cobra.Command, args []string) {
 			mainLogger.Println("Opening Inbox Manager...")
-			// todo: Call your Bubbletea TUI initialization logic here
+			tui.StartTui()
 		},
 	}
 
