@@ -12,6 +12,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/noa-santo/tagfs/internal/logic"
 	. "github.com/noa-santo/tagfs/internal/shared"
 )
 
@@ -57,6 +58,7 @@ type model struct {
 	pendingTags         map[string][]string
 	implicitPendingTags map[string][]string
 	suggestions         map[string]*suggestionState
+	targets             map[string]logic.EffectiveDir
 	keys                keyMap
 	help                help.Model
 	toastMsg            string
@@ -89,6 +91,7 @@ func initialModel(socketPath string) model {
 		pendingTags:         make(map[string][]string),
 		implicitPendingTags: make(map[string][]string),
 		suggestions:         make(map[string]*suggestionState),
+		targets:             make(map[string]logic.EffectiveDir),
 		keys:                defaultKeyMap(),
 		help:                h,
 	}
@@ -194,6 +197,53 @@ func (m model) prevFocus(from focusArea) focusArea {
 	return f
 }
 
+func (m model) itemNeedsTarget(item InboxEntry) bool {
+	tags := m.pendingTags[item.Name]
+	if len(tags) == 0 {
+		return true
+	}
+	_, ok := getTargetDestination(m.socketPath, tags)
+	return !ok
+}
+
+func (m model) findNextUntargeted(from int) (int, bool) {
+	n := len(m.items)
+	if n == 0 {
+		return from, false
+	}
+	for i := 1; i <= n; i++ {
+		idx := (from + i) % n
+		if m.itemNeedsTarget(m.items[idx]) {
+			return idx, true
+		}
+	}
+	return from, false
+}
+
+func (m model) afterTagsChanged(itemName string) (model, tea.Cmd) {
+	tags := m.pendingTags[itemName]
+	if len(tags) == 0 {
+		delete(m.targets, itemName)
+		return m.setSuggestionState()
+	}
+
+	target, ok := getTargetDestination(m.socketPath, tags)
+	if !ok {
+		delete(m.targets, itemName)
+		return m.setSuggestionState()
+	}
+
+	m.targets[itemName] = target
+
+	if item, sel := m.selectedItem(); sel && item.Name == itemName {
+		if idx, found := m.findNextUntargeted(m.cursor); found {
+			m.cursor = idx
+		}
+	}
+
+	return m.setSuggestionState()
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
@@ -267,7 +317,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if err != nil {
 						return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
 					}
-					return m.setSuggestionState()
+					return m.afterTagsChanged(item.Name)
 				}
 
 			case "delete":
@@ -283,7 +333,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
 						}
 						m.tagInput.SetValue("")
-						return m.setSuggestionState()
+						return m.afterTagsChanged(item.Name)
 					}
 				}
 
@@ -471,8 +521,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if err != nil {
 					return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
 				}
-
-				return m.setSuggestionState()
+				return m.afterTagsChanged(item.Name)
 			}
 			return m, nil
 		}
@@ -525,15 +574,23 @@ func (m model) listPanel(width, height int) string {
 			cursor := "  "
 			line := fmt.Sprintf("%s %s", icon, item.Name)
 
+			tagInfo := ""
 			if tags := m.pendingTags[item.Name]; len(tags) > 0 {
-				line += rowDimStyle.Render(fmt.Sprintf("  %s %d", iconTag, len(tags)))
+				tagInfo = fmt.Sprintf("%s %d", iconTag, len(tags))
+				if target, ok := m.targets[item.Name]; ok {
+					tagInfo += fmt.Sprintf(" -> %s", target.Path)
+				}
+			}
+
+			if tagInfo != "" {
+				line += rowDimStyle.Render("  " + tagInfo)
 			}
 
 			if i == m.cursor {
 				cursor = iconChevron + " "
 				line = rowSelectedStyle.Render(fmt.Sprintf(" %s %s ", icon, item.Name))
-				if tags := m.pendingTags[item.Name]; len(tags) > 0 {
-					line += " " + rowDimStyle.Render(fmt.Sprintf("%s %d", iconTag, len(tags)))
+				if tagInfo != "" {
+					line += " " + rowDimStyle.Render(tagInfo)
 				}
 			} else {
 				line = nameStyle.Render(line)

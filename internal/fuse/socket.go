@@ -137,6 +137,11 @@ func handleGetSuggestions(conn net.Conn, reader *bufio.Reader) {
 	}
 }
 
+type TargetResponse struct {
+	Target      logic.EffectiveDir `json:"target"`
+	Unambiguous bool               `json:"unambiguous"`
+}
+
 func handleGetTargetDestination(conn net.Conn, reader *bufio.Reader) {
 	tagsString, err := reader.ReadString('\n')
 	if err != nil {
@@ -149,11 +154,11 @@ func handleGetTargetDestination(conn net.Conn, reader *bufio.Reader) {
 		return
 	}
 	target, unambiguous := logic.GetTargetDestination(tags)
-	if err := json.NewEncoder(conn).Encode(target); err != nil {
-		logger.Printf("Error writing target: %v", err)
-	}
-	if err := json.NewEncoder(conn).Encode(unambiguous); err != nil {
-		logger.Printf("Error writing unambiguous: %v", err)
+	if err := json.NewEncoder(conn).Encode(TargetResponse{
+		Target:      target,
+		Unambiguous: unambiguous,
+	}); err != nil {
+		logger.Printf("Error writing response: %v", err)
 	}
 }
 

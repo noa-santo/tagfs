@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/noa-santo/tagfs/internal/fuse"
 	"github.com/noa-santo/tagfs/internal/logic"
 	. "github.com/noa-santo/tagfs/internal/shared"
 )
@@ -184,17 +185,18 @@ func getTargetDestination(socketPath string, tags []string) (logic.EffectiveDir,
 		}
 	}(conn)
 
-	_, err = conn.Write([]byte(fmt.Sprintf("GET_TARGET_DESTINATION\n%s\n", tags)))
+	tagsString, err := json.Marshal(tags)
 	if err != nil {
 		return logic.EffectiveDir{}, false
 	}
-	var target logic.EffectiveDir
-	if err := json.NewDecoder(conn).Decode(&target); err != nil {
+	_, err = conn.Write([]byte(fmt.Sprintf("GET_TARGET_DESTINATION\n%s\n", tagsString)))
+	if err != nil {
 		return logic.EffectiveDir{}, false
 	}
-	var unambiguous bool
-	if err := json.NewDecoder(conn).Decode(&unambiguous); err != nil {
+	var resp fuse.TargetResponse
+	if err := json.NewDecoder(conn).Decode(&resp); err != nil {
 		return logic.EffectiveDir{}, false
 	}
-	return target, unambiguous
+
+	return resp.Target, resp.Unambiguous
 }
