@@ -471,13 +471,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if err != nil {
 					return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
 				}
-				if m.cursor < len(m.items)-1 {
-					m.cursor++
-				}
 
-				var cmd tea.Cmd
-				m, cmd = m.setSuggestionState()
-				return m, cmd
+				return m.setSuggestionState()
 			}
 			return m, nil
 		}

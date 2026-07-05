@@ -53,9 +53,9 @@ func IsTagCompatible(newTag string, existingTags []string) bool {
 	return false
 }
 
-func GetImplicitTags(tags []string) []string {
+func GetValidDestinations(tags []string) ([]EffectiveDir, map[string]struct{}) {
 	if len(tags) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	requiredTags := make(map[string]struct{})
@@ -79,6 +79,20 @@ func GetImplicitTags(tags []string) []string {
 			validDestinations = append(validDestinations, dir)
 		}
 	}
+
+	return validDestinations, requiredTags
+}
+
+func GetTargetDestination(tags []string) (EffectiveDir, bool) {
+	validDestinations, _ := GetValidDestinations(tags)
+	if len(validDestinations) == 1 {
+		return validDestinations[0], true
+	}
+	return EffectiveDir{}, false
+}
+
+func GetImplicitTags(tags []string) []string {
+	validDestinations, requiredTags := GetValidDestinations(tags)
 
 	if len(validDestinations) == 1 {
 		targetDir := validDestinations[0]

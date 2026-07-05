@@ -171,3 +171,30 @@ func getSuggestions(socketPath string, filename string) (logic.TagSuggestion, er
 	}
 	return suggestions, nil
 }
+
+func getTargetDestination(socketPath string, tags []string) (logic.EffectiveDir, bool) {
+	conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
+	if err != nil {
+		return logic.EffectiveDir{}, false
+	}
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			fmt.Println("Error closing connection:", err)
+		}
+	}(conn)
+
+	_, err = conn.Write([]byte(fmt.Sprintf("GET_TARGET_DESTINATION\n%s\n", tags)))
+	if err != nil {
+		return logic.EffectiveDir{}, false
+	}
+	var target logic.EffectiveDir
+	if err := json.NewDecoder(conn).Decode(&target); err != nil {
+		return logic.EffectiveDir{}, false
+	}
+	var unambiguous bool
+	if err := json.NewDecoder(conn).Decode(&unambiguous); err != nil {
+		return logic.EffectiveDir{}, false
+	}
+	return target, unambiguous
+}

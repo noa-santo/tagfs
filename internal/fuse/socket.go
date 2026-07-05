@@ -137,6 +137,26 @@ func handleGetSuggestions(conn net.Conn, reader *bufio.Reader) {
 	}
 }
 
+func handleGetTargetDestination(conn net.Conn, reader *bufio.Reader) {
+	tagsString, err := reader.ReadString('\n')
+	if err != nil {
+		logger.Printf("Error reading existing tags: %v", err)
+		return
+	}
+	tags := make([]string, 0)
+	if err = json.Unmarshal([]byte(tagsString), &tags); err != nil {
+		logger.Printf("Error unmarshalling existing tags: %v", err)
+		return
+	}
+	target, unambiguous := logic.GetTargetDestination(tags)
+	if err := json.NewEncoder(conn).Encode(target); err != nil {
+		logger.Printf("Error writing target: %v", err)
+	}
+	if err := json.NewEncoder(conn).Encode(unambiguous); err != nil {
+		logger.Printf("Error writing unambiguous: %v", err)
+	}
+}
+
 func handleConnection(conn net.Conn) {
 	defer func(conn net.Conn) {
 		err := conn.Close()
@@ -170,6 +190,8 @@ func handleConnection(conn net.Conn) {
 	case "GET_SUGGESTIONS\n":
 		handleGetSuggestions(conn, reader)
 		break
+	case "GET_TARGET_DESTINATION\n":
+		handleGetTargetDestination(conn, reader)
 	default:
 		logger.Printf("Unknown command: %s", cmd)
 	}
