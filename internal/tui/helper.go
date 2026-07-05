@@ -1,6 +1,10 @@
 package tui
 
-import "fmt"
+import (
+	"fmt"
+
+	"charm.land/lipgloss/v2"
+)
 
 func formatBytes(bytes int64) string {
 	const unit = 1024
@@ -32,17 +36,22 @@ func renderChip(tag selectableTag, isFocused, isDisabled bool) string {
 	if tag.selected {
 		marker = "[x]"
 	}
+	label := fmt.Sprintf("%s %s", marker, tag.name)
 
-	style := tagChipStyle
-	if isDisabled {
-		style = style.Faint(true).Foreground(colorSubtext)
-	} else if isFocused && tag.selected {
+	style := lipgloss.NewStyle().Padding(0, 1).MarginRight(1)
+
+	switch {
+	case isDisabled:
+		style = style.Background(colorSurface).Foreground(colorOverlay)
+	case isFocused && tag.selected:
 		style = style.Background(colorGreen).Foreground(colorBase).Bold(true)
-	} else if isFocused {
-		style = style.Background(colorMauve).Foreground(colorBase)
-	} else if tag.selected {
-		style = style.Foreground(colorGreen).Foreground(colorBase)
+	case isFocused:
+		style = style.Background(colorMauve).Foreground(colorBase).Bold(true)
+	case tag.selected:
+		style = style.Background(colorGreen).Foreground(colorBase)
+	default:
+		style = style.Background(colorSurface).Foreground(colorText)
 	}
 
-	return style.Render(fmt.Sprintf("%s %s", marker, tag.name))
+	return style.Render(label)
 }
