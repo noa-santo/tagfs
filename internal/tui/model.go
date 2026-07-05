@@ -165,6 +165,35 @@ func (m model) selectedItem() (InboxEntry, bool) {
 	return m.items[m.cursor], true
 }
 
+func (m model) currentSuggestionState() *suggestionState {
+	item, ok := m.selectedItem()
+	if !ok {
+		return nil
+	}
+	return m.suggestions[item.Name]
+}
+
+func (m model) hasSuggestions() bool {
+	state := m.currentSuggestionState()
+	return state != nil && (len(state.common) > 0 || len(state.options) > 0)
+}
+
+func (m model) nextFocus(from focusArea) focusArea {
+	f := (from + 1) % focusCount
+	if f == focusSuggested && !m.hasSuggestions() {
+		f = (f + 1) % focusCount
+	}
+	return f
+}
+
+func (m model) prevFocus(from focusArea) focusArea {
+	f := (from - 1 + focusCount) % focusCount
+	if f == focusSuggested && !m.hasSuggestions() {
+		f = (f - 1 + focusCount) % focusCount
+	}
+	return f
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
@@ -183,8 +212,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case []InboxEntry:
 		m.items = msg
 		m.loading = false
-		m.setSuggestionState()
-		return m, nil
+		return m.setSuggestionState()
 
 	case tagMsg:
 		m.tagInput.SetSuggestions(msg)
@@ -261,11 +289,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case "tab":
 				m.tagInput.Blur()
-				m.focus = focusApply
+				m.focus = m.nextFocus(focusTagInput)
+				if m.focus == focusTagInput {
+					return m, m.tagInput.Focus()
+				}
 				return m, nil
 			case "shift+tab":
 				m.tagInput.Blur()
-				m.focus = focusList
+				m.focus = m.prevFocus(focusTagInput)
+				if m.focus == focusTagInput {
+					return m, m.tagInput.Focus()
+				}
 				return m, nil
 			}
 			var cmd tea.Cmd
@@ -274,7 +308,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch msg.String() {
-		case "ctrl+c", "esc", "q":
+		case "ctrl+c", "q":
+			return m, tea.Quit
+		case "esc":
+			if m.focus != focusList {
+				m.focus = focusList
+				return m, nil
+			}
 			return m, tea.Quit
 		case "?":
 			m.help.ShowAll = !m.help.ShowAll
@@ -282,12 +322,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			if m.focus == focusList && m.cursor > 0 {
 				m.cursor--
-				m.setSuggestionState()
+				return m.setSuggestionState()
 			}
 		case "down", "j":
 			if m.focus == focusList && m.cursor < len(m.items)-1 {
 				m.cursor++
-				m.setSuggestionState()
+				return m.setSuggestionState()
 			}
 
 		case "a":
@@ -295,16 +335,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.tagInput.Focus()
 
 		case "tab":
-			m.focus = (m.focus + 1) % focusCount
+			m.focus = m.nextFocus(m.focus)
 			if m.focus == focusTagInput {
 				return m, m.tagInput.Focus()
 			}
 		case "shift+tab":
-			if m.focus == focusList {
-				m.focus = focusCancel
-			} else {
-				m.focus--
-			}
+			m.focus = m.prevFocus(m.focus)
 			if m.focus == focusTagInput {
 				return m, m.tagInput.Focus()
 			}
@@ -430,7 +466,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				sort.Strings(m.pendingTags[item.Name])
-				m.implicitPendingTags[item.Name], _ = getImplicitTags(m.socketPath, m.pendingTags[item.Name])
+				var err error
+				m.implicitPendingTags[item.Name], err = getImplicitTags(m.socketPath, m.pendingTags[item.Name])
+				if err != nil {
+					return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
+				}
 				if m.cursor < len(m.items)-1 {
 					m.cursor++
 				}
@@ -446,10 +486,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseWheelUp {
 			if m.focus == focusList && m.cursor > 0 {
 				m.cursor--
+				return m.setSuggestionState()
 			}
 		} else if msg.Button == tea.MouseWheelDown {
 			if m.focus == focusList && m.cursor < len(m.items)-1 {
 				m.cursor++
+				return m.setSuggestionState()
 			}
 		}
 	}
@@ -609,7 +651,7 @@ func (m model) detailPanel(width, height int) string {
 	b.WriteString(inputStyle.Width(width - 6).Render(m.tagInput.View()))
 
 	style := panelStyle
-	if m.focus == focusTagInput {
+	if m.focus == focusTagInput || m.focus == focusSuggested {
 		style = focusedPanelStyle
 	}
 	return style.Width(width).Height(height).Render(b.String())
