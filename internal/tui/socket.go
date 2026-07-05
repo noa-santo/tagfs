@@ -167,9 +167,13 @@ func getSuggestions(socketPath string, filename string) (logic.TagSuggestion, er
 	if err := json.NewDecoder(conn).Decode(&suggestions); err != nil {
 		return logic.TagSuggestion{}, errors.New(fmt.Sprintf("Error reading from socket: %v", err))
 	}
-	if suggestions.Options[0] == nil {
-		suggestions.Options = make([][]string, 0)
+	var options [][]string
+	for _, option := range suggestions.Options {
+		if option != nil {
+			options = append(options, option)
+		}
 	}
+	suggestions.Options = options
 	return suggestions, nil
 }
 

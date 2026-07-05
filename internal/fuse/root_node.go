@@ -2,6 +2,7 @@ package fuse
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ func (n *rootNode) init(ctx context.Context) {
 	rootLogger.Printf("Initializing inbox...")
 	n.initInbox(ctx)
 	rootLogger.Printf("Initializing dynamic directories...")
-	n.initDynamicDirectories(ctx, &n.Inode, config.Get().StoragePath, config.Get().Directories)
+	n.initDynamicDirectories(ctx, &n.Inode, config.Get().StoragePath, config.Get().Directories, 0)
 	rootLogger.Printf("Initialization complete")
 }
 
@@ -44,12 +45,13 @@ func (n *rootNode) initInbox(ctx context.Context) {
 	n.AddChild(config.Get().InboxDir, childINode, true)
 }
 
-func (n *rootNode) initDynamicDirectories(ctx context.Context, parentInode *fs.Inode, parentPath string, dirConfigs []config.DirectoryConfig) {
+func (n *rootNode) initDynamicDirectories(ctx context.Context, parentInode *fs.Inode, parentPath string, dirConfigs []config.DirectoryConfig, level int) {
 	for _, dirConf := range dirConfigs {
 		dirPath := filepath.Join(parentPath, dirConf.Name)
 		if err := os.MkdirAll(dirPath, 0755); err != nil {
 			rootLogger.Printf("Warning: Failed to create storage directory %s: %v", dirPath, err)
 		}
+		dirConf.Tags = append(dirConf.Tags, fmt.Sprintf("level:%d", level))
 		childNode := &dynamicDirectoryNode{
 			passthroughNode: passthroughNode{Path: dirPath},
 			nodeConfig:      dirConf,
@@ -57,7 +59,7 @@ func (n *rootNode) initDynamicDirectories(ctx context.Context, parentInode *fs.I
 		childInode := parentInode.NewPersistentInode(ctx, childNode, fs.StableAttr{Mode: syscall.S_IFDIR})
 		parentInode.AddChild(dirConf.Name, childInode, true)
 		if len(dirConf.Subdirectories) > 0 {
-			n.initDynamicDirectories(ctx, childInode, dirPath, dirConf.Subdirectories)
+			n.initDynamicDirectories(ctx, childInode, dirPath, dirConf.Subdirectories, level+1)
 		}
 	}
 }

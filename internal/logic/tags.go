@@ -1,13 +1,17 @@
 package logic
 
-import "github.com/noa-santo/tagfs/internal/config"
+import (
+	"fmt"
+
+	"github.com/noa-santo/tagfs/internal/config"
+)
 
 func GetAllTags() []string {
 	c := config.Get()
 	uniqueTags := make(map[string]struct{})
 
 	for _, dir := range c.Directories {
-		collectTags(dir, uniqueTags)
+		collectTags(dir, uniqueTags, 0)
 	}
 
 	tags := make([]string, 0, len(uniqueTags))
@@ -18,7 +22,8 @@ func GetAllTags() []string {
 	return tags
 }
 
-func collectTags(dir config.DirectoryConfig, uniqueTags map[string]struct{}) {
+func collectTags(dir config.DirectoryConfig, uniqueTags map[string]struct{}, level int) {
+	dir.Tags = append(dir.Tags, fmt.Sprintf("level:%d", level))
 	for _, tag := range dir.Tags {
 		if tag != "" {
 			uniqueTags[tag] = struct{}{}
@@ -26,7 +31,7 @@ func collectTags(dir config.DirectoryConfig, uniqueTags map[string]struct{}) {
 	}
 
 	for _, subDir := range dir.Subdirectories {
-		collectTags(subDir, uniqueTags)
+		collectTags(subDir, uniqueTags, level+1)
 	}
 }
 

@@ -380,7 +380,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.setSuggestionState()
 			}
 
-		case "a":
+		case "t":
 			m.focus = focusTagInput
 			return m, m.tagInput.Focus()
 

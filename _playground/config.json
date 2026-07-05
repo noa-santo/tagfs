@@ -88,9 +88,21 @@
         "force_mime_types": true,
         "name_patterns": [],
         "force_name_pattern": false,
-        "allow_subdir_creation": true,
+        "allow_subdir_creation": false,
         "allow_file_creation": true
-      }
+      },
+      "subdirectories": [
+        {
+          "name": "Screenshot",
+          "description": "Screenshots go here :p",
+          "tags": ["screenshot", "screenshots"],
+          "rules": {
+            "force_mime_types": true,
+            "name_patterns": ["Screenshot .*", ".*_grim\\.png"],
+            "allow_file_creation": true
+          }
+        }
+      ]
     },
     {
       "name": "Music",
