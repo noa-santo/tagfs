@@ -162,6 +162,28 @@ func handleGetTargetDestination(conn net.Conn, reader *bufio.Reader) {
 	}
 }
 
+func handleUpdateTags(conn net.Conn, reader *bufio.Reader) {
+	tagMapString, err := reader.ReadString('\n')
+	if err != nil {
+		logger.Printf("Error reading existing tags: %v", err)
+		conn.Write([]byte("ERROR" + err.Error() + "\n"))
+		return
+	}
+	tagMap := make(map[string][]string)
+	if err = json.Unmarshal([]byte(tagMapString), &tagMap); err != nil {
+		logger.Printf("Error unmarshalling existing tags: %v", err)
+		conn.Write([]byte("ERROR" + err.Error() + "\n"))
+		return
+	}
+	logger.Printf("Updating tags: %v", tagMap)
+	_, err = conn.Write([]byte("OK\n"))
+	if err != nil {
+		logger.Printf("Error writing response: %v", err)
+		return
+	}
+	// todo: actually update tags
+}
+
 func handleConnection(conn net.Conn) {
 	defer func(conn net.Conn) {
 		err := conn.Close()
@@ -197,6 +219,8 @@ func handleConnection(conn net.Conn) {
 		break
 	case "GET_TARGET_DESTINATION\n":
 		handleGetTargetDestination(conn, reader)
+	case "UPDATE_TAGS\n":
+		handleUpdateTags(conn, reader)
 	default:
 		logger.Printf("Unknown command: %s", cmd)
 	}

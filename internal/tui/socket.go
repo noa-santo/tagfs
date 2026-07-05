@@ -204,3 +204,35 @@ func getTargetDestination(socketPath string, tags []string) (logic.EffectiveDir,
 
 	return resp.Target, resp.Unambiguous
 }
+
+func applyTagUpdates(socketPath string, tagMap map[string][]string) error {
+	conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Error connecting to socket: %v", err))
+	}
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			fmt.Println("Error closing connection:", err)
+		}
+	}(conn)
+
+	tagMapString, err := json.Marshal(tagMap)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Error marshalling tag map: %v", err))
+	}
+	_, err = conn.Write([]byte(fmt.Sprintf("UPDATE_TAGS\n%s\n", tagMapString)))
+	if err != nil {
+		return errors.New(fmt.Sprintf("Error writing to socket: %v", err))
+	}
+	resp := make([]byte, 1024)
+	n, err := conn.Read(resp)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Error reading from socket: %v", err))
+	}
+	resp = resp[:n]
+	if string(resp) != "OK\n" {
+		return errors.New(fmt.Sprintf("Unexpected response from socket: %s", string(resp)))
+	}
+	return nil
+}

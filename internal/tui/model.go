@@ -333,7 +333,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
 						}
 						m.tagInput.SetValue("")
-						return m.afterTagsChanged(item.Name)
+						return m.setSuggestionState()
 					}
 				}
 
@@ -398,7 +398,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			switch m.focus {
 			case focusApply:
-				// TODO: Apply action
+				if _, allValid := m.findNextUntargeted(0); allValid {
+					return m.showToast("some items are not tagged sufficiently yet", true)
+				}
+				err := applyTagUpdates(m.socketPath, m.pendingTags)
+				if err != nil {
+					return m.showToast(fmt.Sprintf("could not apply tag updates: %s", err.Error()), true)
+				}
+				return m, tea.Quit
 			case focusCancel:
 				return m, tea.Quit
 			default:
