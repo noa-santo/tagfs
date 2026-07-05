@@ -40,13 +40,23 @@ func getInboxEntries() ([]InboxEntry, error) {
 	entries := make([]InboxEntry, len(dirEntries))
 	for i, entry := range dirEntries {
 		entryInfo, _ := entry.Info()
-		mimeType, _ := mimetype.DetectFile(filepath.Join(path, entry.Name()))
+		var mimeType string
+		if !entryInfo.IsDir() {
+			mimeTypeRaw, err := mimetype.DetectFile(filepath.Join(path, entry.Name()))
+			if err != nil {
+				inboxLogger.Printf("Error detecting mime type: %v", err)
+				return []InboxEntry{}, err
+			}
+			mimeType = mimeTypeRaw.String()
+		} else {
+			mimeType = "inode/directory"
+		}
 		entries[i] = InboxEntry{
 			Name:       entry.Name(),
 			IsDir:      entry.IsDir(),
 			ModifiedAt: entryInfo.ModTime().Format("02.01.2006 15:04:05"),
 			Size:       entryInfo.Size(),
-			MimeType:   mimeType.String(),
+			MimeType:   mimeType,
 		}
 	}
 	return entries, nil
@@ -59,16 +69,22 @@ func getInboxEntry(filename string) (InboxEntry, error) {
 		inboxLogger.Printf("Error reading inbox: %v", err)
 		return InboxEntry{}, err
 	}
-	mimeType, err := mimetype.DetectFile(path)
-	if err != nil {
-		inboxLogger.Printf("Error detecting mime type: %v", err)
-		return InboxEntry{}, err
+	var mimeType string
+	if !entryInfo.IsDir() {
+		mimeTypeRaw, err := mimetype.DetectFile(path)
+		if err != nil {
+			inboxLogger.Printf("Error detecting mime type: %v", err)
+			return InboxEntry{}, err
+		}
+		mimeType = mimeTypeRaw.String()
+	} else {
+		mimeType = "inode/directory"
 	}
 	return InboxEntry{
 		Name:       filename,
 		IsDir:      entryInfo.IsDir(),
 		ModifiedAt: entryInfo.ModTime().Format("02.01.2006 15:04:05"),
 		Size:       entryInfo.Size(),
-		MimeType:   mimeType.String(),
+		MimeType:   mimeType,
 	}, nil
 }
