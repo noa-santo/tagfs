@@ -95,6 +95,10 @@ func initialModel(socketPath string) model {
 }
 
 func (m model) setSuggestionState() (model, tea.Cmd) {
+	if len(m.items) == 0 || m.cursor < 0 || m.cursor >= len(m.items) {
+		return m, nil
+	}
+
 	currentSuggestion, err := getSuggestions(m.socketPath, m.items[m.cursor].Name)
 	if err != nil {
 		return m.showToast(fmt.Sprintf("could not get suggestions: %s", err.Error()), true)
@@ -106,7 +110,8 @@ func (m model) setSuggestionState() (model, tea.Cmd) {
 	}
 
 	for _, t := range currentSuggestion.CommonTags {
-		if slices.Contains(m.pendingTags[m.items[m.cursor].Name], t) {
+		compatible, _ := isTagCompatible(m.socketPath, t, m.pendingTags[m.items[m.cursor].Name])
+		if slices.Contains(m.pendingTags[m.items[m.cursor].Name], t) || !compatible {
 			continue
 		}
 		state.common = append(state.common, selectableTag{name: t, selected: true})
@@ -115,9 +120,15 @@ func (m model) setSuggestionState() (model, tea.Cmd) {
 	for _, optGroup := range currentSuggestion.Options {
 		var opt []selectableTag
 		for _, t := range optGroup {
+			compatible, _ := isTagCompatible(m.socketPath, t, m.pendingTags[m.items[m.cursor].Name])
+			if slices.Contains(m.pendingTags[m.items[m.cursor].Name], t) || !compatible {
+				continue
+			}
 			opt = append(opt, selectableTag{name: t, selected: false})
 		}
-		state.options = append(state.options, opt)
+		if len(opt) != 0 {
+			state.options = append(state.options, opt)
+		}
 	}
 
 	if len(state.common) == 0 && len(state.options) > 0 {
@@ -228,6 +239,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if err != nil {
 						return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
 					}
+					return m.setSuggestionState()
 				}
 
 			case "delete":
@@ -242,6 +254,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if err != nil {
 							return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
 						}
+						m.tagInput.SetValue("")
+						return m.setSuggestionState()
 					}
 				}
 
@@ -317,20 +331,44 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+			clampCursorIdx := func() {
+				maxIdx := 0
+				if state.cursorGroup == -1 && len(state.common) > 0 {
+					maxIdx = len(state.common) - 1
+				} else if state.cursorGroup >= 0 && state.cursorGroup < len(state.options) {
+					maxIdx = len(state.options[state.cursorGroup]) - 1
+				}
+				if state.cursorIdx > maxIdx {
+					state.cursorIdx = max(maxIdx, 0)
+				}
+			}
+
 			switch msg.String() {
 			case "up", "k":
 				state.cursorGroup--
+				if state.cursorGroup == -1 && len(state.common) == 0 {
+					state.cursorGroup--
+				}
 				if state.cursorGroup < -1 {
 					state.cursorGroup = len(state.options) - 1
 				}
-				state.cursorIdx = 0
+				clampCursorIdx()
 
 			case "down", "j":
 				state.cursorGroup++
-				if state.cursorGroup >= len(state.options) {
-					state.cursorGroup = -1
+				if state.cursorGroup == -1 && len(state.common) == 0 {
+					state.cursorGroup++
 				}
-				state.cursorIdx = 0
+				if state.cursorGroup >= len(state.options) {
+					if len(state.common) > 0 {
+						state.cursorGroup = -1
+					} else if len(state.options) > 0 {
+						state.cursorGroup = 0
+					} else {
+						state.cursorGroup = -1
+					}
+				}
+				clampCursorIdx()
 
 			case "left", "h":
 				state.cursorIdx--
@@ -340,37 +378,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case "right", "l":
 				state.cursorIdx++
-				maxIdx := 0
-				if state.cursorGroup == -1 && len(state.common) > 0 {
-					maxIdx = len(state.common) - 1
-				} else if state.cursorGroup >= 0 && state.cursorGroup < len(state.options) {
-					maxIdx = len(state.options[state.cursorGroup]) - 1
-				}
-				if state.cursorIdx > maxIdx {
-					state.cursorIdx = maxIdx
-				}
+				clampCursorIdx()
 
 			case "space":
 				if state.cursorGroup == -1 {
-					state.common[state.cursorIdx].selected = !state.common[state.cursorIdx].selected
-				} else if state.cursorGroup >= 0 {
-					if state.activeOpt != -1 && state.activeOpt != state.cursorGroup {
-						for i := range state.options[state.activeOpt] {
-							state.options[state.activeOpt][i].selected = false
-						}
+					if state.cursorIdx >= 0 && state.cursorIdx < len(state.common) {
+						state.common[state.cursorIdx].selected = !state.common[state.cursorIdx].selected
 					}
-					state.activeOpt = state.cursorGroup
-					state.options[state.cursorGroup][state.cursorIdx].selected = !state.options[state.cursorGroup][state.cursorIdx].selected
+				} else if state.cursorGroup >= 0 && state.cursorGroup < len(state.options) {
+					if state.cursorIdx >= 0 && state.cursorIdx < len(state.options[state.cursorGroup]) {
 
-					hasActive := false
-					for _, t := range state.options[state.cursorGroup] {
-						if t.selected {
-							hasActive = true
-							break
+						if state.activeOpt != state.cursorGroup {
+							if state.activeOpt != -1 {
+								for i := range state.options[state.activeOpt] {
+									state.options[state.activeOpt][i].selected = false
+								}
+							}
+							state.activeOpt = state.cursorGroup
+							for i := range state.options[state.cursorGroup] {
+								state.options[state.cursorGroup][i].selected = true
+							}
+						} else {
+							state.options[state.cursorGroup][state.cursorIdx].selected = !state.options[state.cursorGroup][state.cursorIdx].selected
+
+							hasActive := false
+							for _, t := range state.options[state.cursorGroup] {
+								if t.selected {
+									hasActive = true
+									break
+								}
+							}
+							if !hasActive {
+								state.activeOpt = -1
+							}
 						}
-					}
-					if !hasActive {
-						state.activeOpt = -1
 					}
 				}
 
@@ -393,6 +434,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.cursor < len(m.items)-1 {
 					m.cursor++
 				}
+
+				var cmd tea.Cmd
+				m, cmd = m.setSuggestionState()
+				return m, cmd
 			}
 			return m, nil
 		}
@@ -517,7 +562,7 @@ func (m model) detailPanel(width, height int) string {
 	b.WriteString("\n" + sectionLabelStyle.Render(iconMagic+" SUGGESTED TAGS") + "\n")
 
 	state, hasSuggestions := m.suggestions[item.Name]
-	if !hasSuggestions {
+	if !hasSuggestions || (len(state.options) == 0 && len(state.common) == 0) {
 		b.WriteString(emptyHintStyle.Render("no suggestions available") + "\n\n")
 	} else {
 		if len(state.common) > 0 {
@@ -532,12 +577,19 @@ func (m model) detailPanel(width, height int) string {
 
 		for gIdx, optGroup := range state.options {
 			isDisabled := state.activeOpt != -1 && state.activeOpt != gIdx
+			isActive := state.activeOpt == gIdx
 
 			label := rowDimStyle
-			if isDisabled {
+			prefix := "  "
+
+			if isActive {
+				label = lipgloss.NewStyle().Bold(true).Foreground(colorText)
+				prefix = "> "
+			} else if isDisabled {
 				label = label.Faint(true)
 			}
-			b.WriteString(label.Render(fmt.Sprintf("Option %d:", gIdx+1)) + "\n")
+
+			b.WriteString(label.Render(fmt.Sprintf("%sOption %d:", prefix, gIdx+1)) + "\n")
 
 			var chips []string
 			for i, tag := range optGroup {
