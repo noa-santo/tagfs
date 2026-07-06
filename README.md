@@ -11,3 +11,4 @@
 - [ ] in the tui move to the next entry as soon as tags are enough to infer the exact dir it has to go to (remove the auto move from the suggestion thing when that is implemented)
 - [ ] options in nix config to inject into shell to auto launch manager when cd-ing into inbox dir and thing that shows in the terminal how many inbox items there currently are 
 - [ ] inbox waybar widget
+- [ ] when tags are ambiguous give the use the option to display the files in both dirs 
