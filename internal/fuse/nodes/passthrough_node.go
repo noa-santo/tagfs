@@ -1,4 +1,4 @@
-package fuse
+package nodes
 
 import (
 	"context"
@@ -135,7 +135,7 @@ func (n *passthroughNode) Setattr(ctx context.Context, f fs.FileHandle, in *goFu
 
 func (n *passthroughNode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *goFuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
 	fullPath := filepath.Join(n.Path, name)
-	// file not closed because that will be handled by the process that created the file
+	//goland:noinspection GoResourceLeak file isn't closed because that will be handled by the process that created the file
 	f, err := os.OpenFile(fullPath, int(flags)|os.O_CREATE, os.FileMode(mode))
 
 	if err != nil {

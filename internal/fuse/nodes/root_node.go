@@ -1,4 +1,4 @@
-package fuse
+package nodes
 
 import (
 	"context"
@@ -15,12 +15,12 @@ import (
 
 var rootLogger = log.New(os.Stdout, "ROOT NODE: ", log.LstdFlags|log.Lmicroseconds)
 
-type rootNode struct {
+type RootNode struct {
 	fs.Inode
 	inboxNode *inboxNode
 }
 
-func (n *rootNode) init(ctx context.Context) {
+func (n *RootNode) Init(ctx context.Context) {
 	rootLogger.Printf("Initializing passthrough directories...")
 	n.initPassthrough(ctx)
 	rootLogger.Printf("Initializing inbox...")
@@ -30,7 +30,7 @@ func (n *rootNode) init(ctx context.Context) {
 	rootLogger.Printf("Initialization complete")
 }
 
-func (n *rootNode) initPassthrough(ctx context.Context) {
+func (n *RootNode) initPassthrough(ctx context.Context) {
 	for _, dirName := range config.Get().PassthroughDirs {
 		path := filepath.Join(config.Get().StoragePath, dirName)
 		childNode := &passthroughNode{Path: path}
@@ -39,20 +39,20 @@ func (n *rootNode) initPassthrough(ctx context.Context) {
 	}
 }
 
-func (n *rootNode) initInbox(ctx context.Context) {
+func (n *RootNode) initInbox(ctx context.Context) {
 	n.inboxNode = newInboxNode()
 	childINode := n.NewPersistentInode(ctx, n.inboxNode, fs.StableAttr{Mode: syscall.S_IFDIR})
 	n.AddChild(config.Get().InboxDir, childINode, true)
 }
 
-func (n *rootNode) initDynamicDirectories(ctx context.Context, parentInode *fs.Inode, parentPath string, dirConfigs []config.DirectoryConfig, level int) {
+func (n *RootNode) initDynamicDirectories(ctx context.Context, parentInode *fs.Inode, parentPath string, dirConfigs []config.DirectoryConfig, level int) {
 	for _, dirConf := range dirConfigs {
 		dirPath := filepath.Join(parentPath, dirConf.Name)
 		if err := os.MkdirAll(dirPath, 0755); err != nil {
 			rootLogger.Printf("Warning: Failed to create storage directory %s: %v", dirPath, err)
 		}
 		dirConf.Tags = append(dirConf.Tags, fmt.Sprintf("level:%d", level))
-		childNode := &dynamicDirectoryNode{
+		childNode := &staticDirectoryNode{
 			passthroughNode: passthroughNode{Path: dirPath},
 			nodeConfig:      dirConf,
 		}
@@ -64,7 +64,7 @@ func (n *rootNode) initDynamicDirectories(ctx context.Context, parentInode *fs.I
 	}
 }
 
-func (n *rootNode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
+func (n *RootNode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
 	rootLogger.Printf("Forwarding %s to the inbox", name)
 	childInode, inboxFh, sysFlags, errno := n.inboxNode.Create(ctx, name, flags, mode, out)
 	if errno != 0 {
@@ -80,7 +80,7 @@ func (n *rootNode) Create(ctx context.Context, name string, flags uint32, mode u
 	return childInode, wrappedFh, sysFlags, 0
 }
 
-func (n *rootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+func (n *RootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	rootLogger.Printf("Forwarding %s to the inbox", name)
 	childInode, errno := n.inboxNode.Mkdir(ctx, name, mode, out)
 	if errno != 0 {
@@ -102,7 +102,7 @@ func (n *rootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fus
 
 type rootFileHandle struct {
 	fs.FileHandle
-	rootNode *rootNode
+	rootNode *RootNode
 	name     string
 }
 
@@ -153,7 +153,7 @@ func (fh *rootFileHandle) Release(ctx context.Context) syscall.Errno {
 }
 
 var _ = (fs.NodeMkdirer)((*passthroughNode)(nil))
-var _ = (fs.NodeCreater)((*rootNode)(nil))
+var _ = (fs.NodeCreater)((*RootNode)(nil))
 
 var _ fs.FileWriter = (*rootFileHandle)(nil)
 var _ fs.FileReader = (*rootFileHandle)(nil)

@@ -1,4 +1,4 @@
-package fuse
+package nodes
 
 import (
 	"log"
@@ -30,7 +30,7 @@ func newInboxNode() *inboxNode {
 	}
 }
 
-func getInboxEntries() ([]InboxEntry, error) {
+func GetInboxEntries() ([]InboxEntry, error) {
 	path := filepath.Join(config.Get().StoragePath, ".inbox")
 	dirEntries, err := os.ReadDir(path)
 	if err != nil {
@@ -62,7 +62,7 @@ func getInboxEntries() ([]InboxEntry, error) {
 	return entries, nil
 }
 
-func getInboxEntry(filename string) (InboxEntry, error) {
+func GetInboxEntry(filename string) (InboxEntry, error) {
 	path := filepath.Join(config.Get().StoragePath, ".inbox", filename)
 	entryInfo, err := os.Stat(path)
 	if err != nil {

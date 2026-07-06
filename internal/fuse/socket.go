@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/noa-santo/tagfs/internal/fuse/nodes"
 	"github.com/noa-santo/tagfs/internal/logic"
 )
 
@@ -57,15 +58,15 @@ func startCommandListener() {
 }
 
 func handleListInbox(conn net.Conn) {
-	entries, err := getInboxEntries()
+	entries, err := nodes.GetInboxEntries()
 	if err != nil {
-		inboxLogger.Printf("Error pulling entries: %v", err)
+		logger.Printf("Error pulling entries: %v", err)
 		return
 	}
 	_ = json.NewEncoder(os.Stdout).Encode(entries)
 	err = json.NewEncoder(conn).Encode(entries)
 	if err != nil {
-		inboxLogger.Printf("Error writing entries: %v", err)
+		logger.Printf("Error writing entries: %v", err)
 	}
 }
 
@@ -125,7 +126,7 @@ func handleGetSuggestions(conn net.Conn, reader *bufio.Reader) {
 		return
 	}
 	fileName := strings.TrimSuffix(fileNameString, "\n")
-	entry, err := getInboxEntry(fileName)
+	entry, err := nodes.GetInboxEntry(fileName)
 	if err != nil {
 		logger.Printf("Error reading inbox entry: %v", err)
 		return

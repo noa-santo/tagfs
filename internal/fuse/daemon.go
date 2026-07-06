@@ -10,11 +10,11 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/noa-santo/tagfs/internal/config"
+	"github.com/noa-santo/tagfs/internal/fuse/nodes"
 )
 
 var logger = log.New(os.Stdout, "DAEMON: ", log.LstdFlags|log.Lmicroseconds)
 
-// StartDaemon initializes the FUSE mount
 func StartDaemon() {
 	opts := &fs.Options{
 		Logger: logger,
@@ -22,14 +22,14 @@ func StartDaemon() {
 			Debug: true,
 		},
 	}
-	root := &rootNode{}
+	root := &nodes.RootNode{}
 	server, err := fs.Mount(config.Get().MountPath, root, opts)
 	if err != nil {
 		logger.Fatalf("Mount fail: %v\n", err)
 	}
 	logger.Printf("Mounted %s at %s", config.Get().StoragePath, config.Get().MountPath)
 
-	root.init(context.Background())
+	root.Init(context.Background())
 	go startCommandListener()
 
 	sigChan := make(chan os.Signal, 1)
