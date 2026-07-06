@@ -166,13 +166,19 @@ func handleUpdateTags(conn net.Conn, reader *bufio.Reader) {
 	tagMapString, err := reader.ReadString('\n')
 	if err != nil {
 		logger.Printf("Error reading existing tags: %v", err)
-		conn.Write([]byte("ERROR" + err.Error() + "\n"))
+		_, writeErr := conn.Write([]byte("ERROR" + err.Error() + "\n"))
+		if writeErr != nil {
+			logger.Printf("Error writing response: %v", writeErr)
+		}
 		return
 	}
 	tagMap := make(map[string][]string)
 	if err = json.Unmarshal([]byte(tagMapString), &tagMap); err != nil {
 		logger.Printf("Error unmarshalling existing tags: %v", err)
-		conn.Write([]byte("ERROR" + err.Error() + "\n"))
+		_, writeErr := conn.Write([]byte("ERROR" + err.Error() + "\n"))
+		if writeErr != nil {
+			logger.Printf("Error writing response: %v", writeErr)
+		}
 		return
 	}
 	logger.Printf("Updating tags: %v", tagMap)
