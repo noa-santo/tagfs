@@ -18,6 +18,15 @@ func (q *Queries) ClearTags(ctx context.Context, nodeID string) error {
 	return err
 }
 
+const deleteNode = `-- name: DeleteNode :exec
+DELETE FROM nodes WHERE id = ?
+`
+
+func (q *Queries) DeleteNode(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteNode, id)
+	return err
+}
+
 const getAllNodes = `-- name: GetAllNodes :many
 SELECT id, orig_name, mode FROM nodes
 `

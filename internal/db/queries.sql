@@ -13,6 +13,9 @@ SELECT * FROM nodes;
 -- name: GetNode :one
 SELECT * FROM nodes WHERE id = ?;
 
+-- name: DeleteNode :exec
+DELETE FROM nodes WHERE id = ?;
+
 -- name: ClearTags :exec
 DELETE FROM node_tags WHERE node_id = ?;
 
