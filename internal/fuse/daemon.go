@@ -10,12 +10,14 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/noa-santo/tagfs/internal/config"
+	"github.com/noa-santo/tagfs/internal/db"
 	"github.com/noa-santo/tagfs/internal/fuse/nodes"
 )
 
 var logger = log.New(os.Stdout, "DAEMON: ", log.LstdFlags|log.Lmicroseconds)
 
 func StartDaemon() {
+	db.Get()
 	opts := &fs.Options{
 		Logger: logger,
 		MountOptions: fuse.MountOptions{

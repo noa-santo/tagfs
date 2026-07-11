@@ -34,7 +34,7 @@ func (n *passthroughNode) Readdir(_ context.Context) (fs.DirStream, syscall.Errn
 			Mode: uint32(info.Mode()),
 		})
 	}
-	return fs.NewListDirStream(result), 0
+	return fs.NewListDirStream(result), fs.OK
 }
 
 func (n *passthroughNode) Lookup(ctx context.Context, name string, out *goFuse.EntryOut) (*fs.Inode, syscall.Errno) {

@@ -12,3 +12,4 @@
 - [ ] options in nix config to inject into shell to auto launch manager when cd-ing into inbox dir and thing that shows in the terminal how many inbox items there currently are 
 - [ ] inbox waybar widget
 - [ ] when tags are ambiguous give the use the option to display the files in both dirs 
+- [ ] backup db data for files into it's xattr so that the db can be restored when lost
