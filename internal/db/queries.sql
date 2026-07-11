@@ -1,24 +1,20 @@
--- name: InsertFile :exec
-INSERT INTO files (id, orig_name, mode)
+-- name: InsertNode :exec
+INSERT INTO nodes (id, orig_name, mode)
 VALUES (?, ?, ?);
 
--- name: InsertDynamicDirectory :exec
-INSERT INTO dynamic_directories (id, parent_id, name)
-VALUES (?, ?, ?);
-
--- name: UpdateFileStats :exec
-UPDATE files
+-- name: UpdateNodeMode :exec
+UPDATE nodes
 SET mode = ?
 WHERE id = ?;
 
--- name: GetAllFiles :many
-SELECT * FROM files;
+-- name: GetAllNodes :many
+SELECT * FROM nodes;
 
--- name: GetFile :one
-SELECT * FROM files WHERE id = ?;
+-- name: GetNode :one
+SELECT * FROM nodes WHERE id = ?;
 
--- name: ClearFileTags :exec
-DELETE FROM file_tags WHERE file_id = ?;
+-- name: ClearTags :exec
+DELETE FROM node_tags WHERE node_id = ?;
 
--- name: InsertFileTag :exec
-INSERT INTO file_tags (file_id, tag_name) VALUES (?, ?);
+-- name: InsertTag :exec
+INSERT INTO node_tags (node_id, tag_name) VALUES (?, ?);

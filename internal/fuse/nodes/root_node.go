@@ -2,7 +2,6 @@ package nodes
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -77,7 +76,7 @@ func (n *RootNode) Create(ctx context.Context, name string, flags uint32, mode u
 		rootLogger.Printf("Error creating physical file: %v", err)
 		return nil, nil, 0, fs.ToErrno(err)
 	}
-	err = db.Get().Queries.InsertFile(ctx, gen.InsertFileParams{
+	err = db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
 		ID:       fileID,
 		OrigName: name,
 		Mode:     int64(mode),
@@ -110,17 +109,25 @@ func (n *RootNode) Create(ctx context.Context, name string, flags uint32, mode u
 func (n *RootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	rootLogger.Printf("Ingesting new directory at root: %s", name)
 	dirID := ulid.Make().String()
-	err := db.Get().Queries.InsertDynamicDirectory(ctx, gen.InsertDynamicDirectoryParams{
+	dataPath := filepath.Join(config.Get().StoragePath, ".data", dirID)
+	if err := os.MkdirAll(dataPath, 0755); err != nil {
+		return nil, fs.ToErrno(err)
+	}
+	physicalPath := filepath.Join(dataPath, name)
+	if err := os.Mkdir(physicalPath, os.FileMode(mode)); err != nil {
+		return nil, fs.ToErrno(err)
+	}
+	err := db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
 		ID:       dirID,
-		ParentID: sql.NullString{Valid: false},
-		Name:     name,
+		OrigName: name,
+		Mode:     int64(mode),
 	})
 	if err != nil {
 		rootLogger.Printf("Error inserting directory into DB: %v", err)
 		return nil, syscall.EIO
 	}
 
-	childNode := &fs.Inode{}
+	childNode := &passthroughNode{Path: physicalPath}
 	childInode := n.NewPersistentInode(ctx, childNode, fs.StableAttr{Mode: syscall.S_IFDIR | mode})
 
 	out.EntryValid = 0
@@ -174,7 +181,7 @@ func (fh *rootFileHandle) Release(ctx context.Context) syscall.Errno {
 	if err != nil {
 		rootLogger.Printf("Error reading stats for file %s: %v", fh.name, err)
 	} else {
-		dbErr := db.Get().Queries.UpdateFileStats(ctx, gen.UpdateFileStatsParams{
+		dbErr := db.Get().Queries.UpdateNodeMode(ctx, gen.UpdateNodeModeParams{
 			Mode: int64(info.Mode()),
 			ID:   fh.fileID,
 		})

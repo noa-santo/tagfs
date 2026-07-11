@@ -7,31 +7,30 @@ package gen
 
 import (
 	"context"
-	"database/sql"
 )
 
-const clearFileTags = `-- name: ClearFileTags :exec
-DELETE FROM file_tags WHERE file_id = ?
+const clearTags = `-- name: ClearTags :exec
+DELETE FROM node_tags WHERE node_id = ?
 `
 
-func (q *Queries) ClearFileTags(ctx context.Context, fileID string) error {
-	_, err := q.db.ExecContext(ctx, clearFileTags, fileID)
+func (q *Queries) ClearTags(ctx context.Context, nodeID string) error {
+	_, err := q.db.ExecContext(ctx, clearTags, nodeID)
 	return err
 }
 
-const getAllFiles = `-- name: GetAllFiles :many
-SELECT id, orig_name, mode FROM files
+const getAllNodes = `-- name: GetAllNodes :many
+SELECT id, orig_name, mode FROM nodes
 `
 
-func (q *Queries) GetAllFiles(ctx context.Context) ([]File, error) {
-	rows, err := q.db.QueryContext(ctx, getAllFiles)
+func (q *Queries) GetAllNodes(ctx context.Context) ([]Node, error) {
+	rows, err := q.db.QueryContext(ctx, getAllNodes)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []File
+	var items []Node
 	for rows.Next() {
-		var i File
+		var i Node
 		if err := rows.Scan(&i.ID, &i.OrigName, &i.Mode); err != nil {
 			return nil, err
 		}
@@ -46,75 +45,59 @@ func (q *Queries) GetAllFiles(ctx context.Context) ([]File, error) {
 	return items, nil
 }
 
-const getFile = `-- name: GetFile :one
-SELECT id, orig_name, mode FROM files WHERE id = ?
+const getNode = `-- name: GetNode :one
+SELECT id, orig_name, mode FROM nodes WHERE id = ?
 `
 
-func (q *Queries) GetFile(ctx context.Context, id string) (File, error) {
-	row := q.db.QueryRowContext(ctx, getFile, id)
-	var i File
+func (q *Queries) GetNode(ctx context.Context, id string) (Node, error) {
+	row := q.db.QueryRowContext(ctx, getNode, id)
+	var i Node
 	err := row.Scan(&i.ID, &i.OrigName, &i.Mode)
 	return i, err
 }
 
-const insertDynamicDirectory = `-- name: InsertDynamicDirectory :exec
-INSERT INTO dynamic_directories (id, parent_id, name)
+const insertNode = `-- name: InsertNode :exec
+INSERT INTO nodes (id, orig_name, mode)
 VALUES (?, ?, ?)
 `
 
-type InsertDynamicDirectoryParams struct {
-	ID       string
-	ParentID sql.NullString
-	Name     string
-}
-
-func (q *Queries) InsertDynamicDirectory(ctx context.Context, arg InsertDynamicDirectoryParams) error {
-	_, err := q.db.ExecContext(ctx, insertDynamicDirectory, arg.ID, arg.ParentID, arg.Name)
-	return err
-}
-
-const insertFile = `-- name: InsertFile :exec
-INSERT INTO files (id, orig_name, mode)
-VALUES (?, ?, ?)
-`
-
-type InsertFileParams struct {
+type InsertNodeParams struct {
 	ID       string
 	OrigName string
 	Mode     int64
 }
 
-func (q *Queries) InsertFile(ctx context.Context, arg InsertFileParams) error {
-	_, err := q.db.ExecContext(ctx, insertFile, arg.ID, arg.OrigName, arg.Mode)
+func (q *Queries) InsertNode(ctx context.Context, arg InsertNodeParams) error {
+	_, err := q.db.ExecContext(ctx, insertNode, arg.ID, arg.OrigName, arg.Mode)
 	return err
 }
 
-const insertFileTag = `-- name: InsertFileTag :exec
-INSERT INTO file_tags (file_id, tag_name) VALUES (?, ?)
+const insertTag = `-- name: InsertTag :exec
+INSERT INTO node_tags (node_id, tag_name) VALUES (?, ?)
 `
 
-type InsertFileTagParams struct {
-	FileID  string
+type InsertTagParams struct {
+	NodeID  string
 	TagName string
 }
 
-func (q *Queries) InsertFileTag(ctx context.Context, arg InsertFileTagParams) error {
-	_, err := q.db.ExecContext(ctx, insertFileTag, arg.FileID, arg.TagName)
+func (q *Queries) InsertTag(ctx context.Context, arg InsertTagParams) error {
+	_, err := q.db.ExecContext(ctx, insertTag, arg.NodeID, arg.TagName)
 	return err
 }
 
-const updateFileStats = `-- name: UpdateFileStats :exec
-UPDATE files
+const updateNodeMode = `-- name: UpdateNodeMode :exec
+UPDATE nodes
 SET mode = ?
 WHERE id = ?
 `
 
-type UpdateFileStatsParams struct {
+type UpdateNodeModeParams struct {
 	Mode int64
 	ID   string
 }
 
-func (q *Queries) UpdateFileStats(ctx context.Context, arg UpdateFileStatsParams) error {
-	_, err := q.db.ExecContext(ctx, updateFileStats, arg.Mode, arg.ID)
+func (q *Queries) UpdateNodeMode(ctx context.Context, arg UpdateNodeModeParams) error {
+	_, err := q.db.ExecContext(ctx, updateNodeMode, arg.Mode, arg.ID)
 	return err
 }

@@ -21,7 +21,7 @@ type staticDirectoryNode struct {
 }
 
 func (n *staticDirectoryNode) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
-	files, err := db.Get().GetFilesForDir(ctx, n.nodeConfig.Tags)
+	files, err := db.Get().GetNodesForDir(ctx, n.nodeConfig.Tags)
 	if err != nil {
 		staticDirLogger.Printf("Readdir: GetFilesForDir failed for %s: %v", n.nodeConfig.Name, err)
 		return nil, syscall.EIO
@@ -38,29 +38,29 @@ func (n *staticDirectoryNode) Readdir(ctx context.Context) (fs.DirStream, syscal
 }
 
 func (n *staticDirectoryNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
-	files, err := db.Get().GetFilesForDir(ctx, n.nodeConfig.Tags)
+	nodes, err := db.Get().GetNodesForDir(ctx, n.nodeConfig.Tags)
 	if err != nil {
 		staticDirLogger.Printf("Lookup: GetFilesForDir failed for %s: %v", n.nodeConfig.Name, err)
 		return nil, syscall.EIO
 	}
 
-	for _, file := range files {
-		if file.OrigName != name {
+	for _, node := range nodes {
+		if node.OrigName != name {
 			continue
 		}
 
-		physicalPath := filepath.Join(config.Get().StoragePath, ".data", file.ID, file.OrigName)
+		physicalPath := filepath.Join(config.Get().StoragePath, ".data", node.ID, node.OrigName)
 
 		var st syscall.Stat_t
 		if err := syscall.Stat(physicalPath, &st); err != nil {
-			staticDirLogger.Printf("Lookup: stat failed for %s (id=%s): %v", physicalPath, file.ID, err)
+			staticDirLogger.Printf("Lookup: stat failed for %s (id=%s): %v", physicalPath, node.ID, err)
 			return nil, fs.ToErrno(err)
 		}
 		out.Attr.FromStat(&st)
 
 		childNode := &passthroughNode{Path: physicalPath}
 		childInode := n.NewInode(ctx, childNode, fs.StableAttr{
-			Mode: uint32(file.Mode) & syscall.S_IFMT,
+			Mode: uint32(node.Mode) & syscall.S_IFMT,
 		})
 		return childInode, fs.OK
 	}

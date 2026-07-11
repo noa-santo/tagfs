@@ -4,28 +4,13 @@
 
 package gen
 
-import (
-	"database/sql"
-)
-
-type DirectoryTag struct {
-	DirID   string
-	TagName string
-}
-
-type DynamicDirectory struct {
-	ID       string
-	ParentID sql.NullString
-	Name     string
-}
-
-type File struct {
+type Node struct {
 	ID       string
 	OrigName string
 	Mode     int64
 }
 
-type FileTag struct {
-	FileID  string
+type NodeTag struct {
+	NodeID  string
 	TagName string
 }

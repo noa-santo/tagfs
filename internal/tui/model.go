@@ -401,7 +401,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if _, allValid := m.findNextUntargeted(0); allValid {
 					return m.showToast("some items are not tagged sufficiently yet", true)
 				}
-				err := applyTagUpdates(m.socketPath, m.pendingTags)
+				allTagsMap := make(map[string][]string, len(m.pendingTags)+len(m.implicitPendingTags))
+				for k, v := range m.pendingTags {
+					allTagsMap[k] = append(v, m.implicitPendingTags[k]...)
+				}
+				err := applyTagUpdates(m.socketPath, allTagsMap)
 				if err != nil {
 					return m.showToast(fmt.Sprintf("could not apply tag updates: %s", err.Error()), true)
 				}

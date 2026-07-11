@@ -28,7 +28,7 @@ func categorizedFileIDs(ctx context.Context, dirConfigs []config.DirectoryConfig
 	var walk func([]config.DirectoryConfig) error
 	walk = func(configs []config.DirectoryConfig) error {
 		for _, dirConf := range configs {
-			files, err := db.Get().GetFilesForDir(ctx, dirConf.Tags)
+			files, err := db.Get().GetNodesForDir(ctx, dirConf.Tags)
 			if err != nil {
 				return err
 			}
@@ -49,8 +49,8 @@ func categorizedFileIDs(ctx context.Context, dirConfigs []config.DirectoryConfig
 	return matched, nil
 }
 
-func uncategorizedFiles(ctx context.Context) ([]gen.File, error) {
-	all, err := db.Get().Queries.GetAllFiles(ctx)
+func uncategorizedFiles(ctx context.Context) ([]gen.Node, error) {
+	all, err := db.Get().Queries.GetAllNodes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func uncategorizedFiles(ctx context.Context) ([]gen.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := make([]gen.File, 0, len(all))
+	result := make([]gen.Node, 0, len(all))
 	for _, f := range all {
 		if !categorized[f.ID] {
 			result = append(result, f)
@@ -119,7 +119,7 @@ var _ fs.NodeReaddirer = (*inboxNode)(nil)
 var _ fs.NodeLookuper = (*inboxNode)(nil)
 var _ fs.NodeGetattrer = (*inboxNode)(nil)
 
-func buildInboxEntry(f gen.File) (InboxEntry, error) {
+func buildInboxEntry(f gen.Node) (InboxEntry, error) {
 	physicalPath := filepath.Join(config.Get().StoragePath, ".data", f.ID, f.OrigName)
 	entryInfo, err := os.Stat(physicalPath)
 	if err != nil {
@@ -167,7 +167,7 @@ func GetInboxEntries() ([]InboxEntry, error) {
 }
 
 func GetInboxEntry(uid string) (InboxEntry, error) {
-	file, err := db.Get().Queries.GetFile(db.Get().Ctx, uid)
+	file, err := db.Get().Queries.GetNode(db.Get().Ctx, uid)
 	if err != nil {
 		return InboxEntry{}, err
 	}

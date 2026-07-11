@@ -10,7 +10,7 @@ import (
 	"github.com/noa-santo/tagfs/internal/logic"
 )
 
-func (db *DB) GetFilesForDir(ctx context.Context, selectedTags []string) ([]gen.File, error) {
+func (db *DB) GetNodesForDir(ctx context.Context, selectedTags []string) ([]gen.Node, error) {
 	if len(selectedTags) == 0 {
 		return nil, nil
 	}
@@ -35,12 +35,12 @@ func (db *DB) GetFilesForDir(ctx context.Context, selectedTags []string) ([]gen.
 	}
 
 	query := fmt.Sprintf(`
-		SELECT f.id, f.orig_name, f.mode
-		FROM files f
-		JOIN file_tags ft ON f.id = ft.file_id
-		WHERE ft.tag_name IN (%s)
-		GROUP BY f.id
-		HAVING COUNT(DISTINCT ft.tag_name) = ?
+		SELECT n.id, n.orig_name, n.mode
+		FROM nodes n
+		JOIN node_tags nt ON n.id = nt.node_id
+		WHERE nt.tag_name IN (%s)
+		GROUP BY n.id
+		HAVING COUNT(DISTINCT nt.tag_name) = ?
 	`, strings.Join(placeholders, ","))
 
 	args := append(tagArgs, tagCount)
@@ -56,21 +56,21 @@ func (db *DB) GetFilesForDir(ctx context.Context, selectedTags []string) ([]gen.
 		}
 	}(rows)
 
-	var files []gen.File
+	var nodes []gen.Node
 	for rows.Next() {
-		var f gen.File
-		err := rows.Scan(&f.ID, &f.OrigName, &f.Mode)
+		var n gen.Node
+		err := rows.Scan(&n.ID, &n.OrigName, &n.Mode)
 		if err != nil {
 			return nil, fmt.Errorf("scanning file row: %w", err)
 		}
-		files = append(files, f)
+		nodes = append(nodes, n)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating file rows: %w", err)
 	}
 
-	return files, nil
+	return nodes, nil
 }
 
 func (db *DB) UpdateTags(id string, tags []string) error {
@@ -90,7 +90,7 @@ func (db *DB) UpdateTags(id string, tags []string) error {
 	}(tx, &committed)
 	qtx := db.Queries.WithTx(tx)
 
-	err = qtx.ClearFileTags(db.Ctx, id)
+	err = qtx.ClearTags(db.Ctx, id)
 	if err != nil {
 		return fmt.Errorf("clearing existing tags: %w", err)
 	}
@@ -104,8 +104,8 @@ func (db *DB) UpdateTags(id string, tags []string) error {
 			continue
 		}
 		seen[tag] = struct{}{}
-		err = qtx.InsertFileTag(db.Ctx, gen.InsertFileTagParams{
-			FileID:  id,
+		err = qtx.InsertTag(db.Ctx, gen.InsertTagParams{
+			NodeID:  id,
 			TagName: tag,
 		})
 		if err != nil {
