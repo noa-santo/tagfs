@@ -21,17 +21,17 @@ type staticDirectoryNode struct {
 }
 
 func (n *staticDirectoryNode) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
-	files, err := db.Get().GetNodesForDir(ctx, n.nodeConfig.Tags)
+	nodes, err := db.Get().GetNodesForDir(ctx, n.nodeConfig.Tags)
 	if err != nil {
 		staticDirLogger.Printf("Readdir: GetFilesForDir failed for %s: %v", n.nodeConfig.Name, err)
 		return nil, syscall.EIO
 	}
 	var result []fuse.DirEntry
-	for _, file := range files {
+	for _, node := range nodes {
 		result = append(result, fuse.DirEntry{
-			Name: file.OrigName,
+			Name: node.OrigName,
 			Ino:  0,
-			Mode: uint32(file.Mode),
+			Mode: uint32(node.Mode),
 		})
 	}
 	return fs.NewListDirStream(result), fs.OK

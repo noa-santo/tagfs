@@ -13,6 +13,7 @@ import (
 	"github.com/noa-santo/tagfs/internal/config"
 	"github.com/noa-santo/tagfs/internal/db"
 	"github.com/noa-santo/tagfs/internal/db/gen"
+	"github.com/noa-santo/tagfs/internal/logic"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -79,7 +80,7 @@ func (n *RootNode) Create(ctx context.Context, name string, flags uint32, mode u
 	err = db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
 		ID:       fileID,
 		OrigName: name,
-		Mode:     int64(mode),
+		Mode:     logic.ToStoredMode(mode, false),
 	})
 	if err != nil {
 		err := f.Close()
@@ -120,7 +121,7 @@ func (n *RootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fus
 	err := db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
 		ID:       dirID,
 		OrigName: name,
-		Mode:     int64(mode),
+		Mode:     logic.ToStoredMode(mode, true),
 	})
 	if err != nil {
 		rootLogger.Printf("Error inserting directory into DB: %v", err)
