@@ -13,3 +13,4 @@
 - [ ] inbox waybar widget
 - [ ] when tags are ambiguous give the use the option to display the files in both dirs 
 - [ ] backup db data for files into it's xattr so that the db can be restored when lost
+- [ ] cache virtual path for faster lookup

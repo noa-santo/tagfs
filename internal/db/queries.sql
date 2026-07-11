@@ -10,3 +10,6 @@ VALUES (?, ?, ?, ?);
 UPDATE files
 SET size = ?, mtime_cached = ?, mode = ?
 WHERE id = ?;
+
+-- name: GetAllFiles :many
+SELECT * FROM files;

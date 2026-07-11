@@ -10,6 +10,40 @@ import (
 	"database/sql"
 )
 
+const getAllFiles = `-- name: GetAllFiles :many
+SELECT id, orig_name, mode, size, mtime_cached, meta_json FROM files
+`
+
+func (q *Queries) GetAllFiles(ctx context.Context) ([]File, error) {
+	rows, err := q.db.QueryContext(ctx, getAllFiles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []File
+	for rows.Next() {
+		var i File
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrigName,
+			&i.Mode,
+			&i.Size,
+			&i.MtimeCached,
+			&i.MetaJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertDynamicDirectory = `-- name: InsertDynamicDirectory :exec
 INSERT INTO dynamic_directories (id, parent_id, name, created_at)
 VALUES (?, ?, ?, ?)

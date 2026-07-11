@@ -45,7 +45,7 @@ func (n *RootNode) initPassthrough(ctx context.Context) {
 }
 
 func (n *RootNode) initInbox(ctx context.Context) {
-	n.inboxNode = newInboxNode()
+	n.inboxNode = &inboxNode{}
 	childINode := n.NewPersistentInode(ctx, n.inboxNode, fs.StableAttr{Mode: syscall.S_IFDIR})
 	n.AddChild(config.Get().InboxDir, childINode, true)
 }
