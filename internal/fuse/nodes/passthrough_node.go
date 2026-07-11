@@ -43,17 +43,8 @@ func (n *passthroughNode) Lookup(ctx context.Context, name string, out *goFuse.E
 	if err := syscall.Lstat(fullPath, &stat); err != nil {
 		return nil, fs.ToErrno(err)
 	}
-
 	out.FromStat(&stat)
-
-	var child *fs.Inode
-	if stat.Mode&syscall.S_IFMT == syscall.S_IFDIR {
-		child = n.NewPersistentInode(ctx, &passthroughNode{Path: fullPath}, fs.StableAttr{Mode: stat.Mode})
-	} else {
-		child = n.NewPersistentInode(ctx, &passthroughNode{Path: fullPath}, fs.StableAttr{Mode: stat.Mode})
-	}
-
-	return child, 0
+	return n.NewPersistentInode(ctx, &passthroughNode{Path: fullPath}, fs.StableAttr{Mode: stat.Mode}), 0
 }
 
 func (n *passthroughNode) Mkdir(ctx context.Context, name string, mode uint32, out *goFuse.EntryOut) (*fs.Inode, syscall.Errno) {

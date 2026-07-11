@@ -7,38 +7,76 @@ package gen
 
 import (
 	"context"
+	"database/sql"
 )
 
-const getFiles = `-- name: GetFiles :many
-SELECT id, orig_name, mode, size, mtime_cached, meta_json FROM files
+const insertDynamicDirectory = `-- name: InsertDynamicDirectory :exec
+INSERT INTO dynamic_directories (id, parent_id, name, created_at)
+VALUES (?, ?, ?, ?)
 `
 
-func (q *Queries) GetFiles(ctx context.Context) ([]File, error) {
-	rows, err := q.db.QueryContext(ctx, getFiles)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []File
-	for rows.Next() {
-		var i File
-		if err := rows.Scan(
-			&i.ID,
-			&i.OrigName,
-			&i.Mode,
-			&i.Size,
-			&i.MtimeCached,
-			&i.MetaJson,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type InsertDynamicDirectoryParams struct {
+	ID        string
+	ParentID  sql.NullString
+	Name      string
+	CreatedAt int64
+}
+
+func (q *Queries) InsertDynamicDirectory(ctx context.Context, arg InsertDynamicDirectoryParams) error {
+	_, err := q.db.ExecContext(ctx, insertDynamicDirectory,
+		arg.ID,
+		arg.ParentID,
+		arg.Name,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const insertFile = `-- name: InsertFile :exec
+INSERT INTO files (id, orig_name, mode, size, mtime_cached, meta_json)
+VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type InsertFileParams struct {
+	ID          string
+	OrigName    string
+	Mode        int64
+	Size        int64
+	MtimeCached int64
+	MetaJson    sql.NullString
+}
+
+func (q *Queries) InsertFile(ctx context.Context, arg InsertFileParams) error {
+	_, err := q.db.ExecContext(ctx, insertFile,
+		arg.ID,
+		arg.OrigName,
+		arg.Mode,
+		arg.Size,
+		arg.MtimeCached,
+		arg.MetaJson,
+	)
+	return err
+}
+
+const updateFileStats = `-- name: UpdateFileStats :exec
+UPDATE files
+SET size = ?, mtime_cached = ?, mode = ?
+WHERE id = ?
+`
+
+type UpdateFileStatsParams struct {
+	Size        int64
+	MtimeCached int64
+	Mode        int64
+	ID          string
+}
+
+func (q *Queries) UpdateFileStats(ctx context.Context, arg UpdateFileStatsParams) error {
+	_, err := q.db.ExecContext(ctx, updateFileStats,
+		arg.Size,
+		arg.MtimeCached,
+		arg.Mode,
+		arg.ID,
+	)
+	return err
 }

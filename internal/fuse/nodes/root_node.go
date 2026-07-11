@@ -2,15 +2,20 @@ package nodes
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/noa-santo/tagfs/internal/config"
+	"github.com/noa-santo/tagfs/internal/db"
+	"github.com/noa-santo/tagfs/internal/db/gen"
+	"github.com/oklog/ulid/v2"
 )
 
 var rootLogger = log.New(os.Stdout, "ROOT NODE: ", log.LstdFlags|log.Lmicroseconds)
@@ -64,34 +69,74 @@ func (n *RootNode) initDynamicDirectories(ctx context.Context, parentInode *fs.I
 	}
 }
 
-func (n *RootNode) Create(ctx context.Context, name string, flags uint32, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
-	rootLogger.Printf("Forwarding %s to the inbox", name)
-	childInode, inboxFh, sysFlags, errno := n.inboxNode.Create(ctx, name, flags, mode, out)
-	if errno != 0 {
-		return nil, nil, 0, errno
+func (n *RootNode) Create(ctx context.Context, name string, flags uint32, mode uint32, _ *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
+	rootLogger.Printf("Ingesting new file at root: %s", name)
+	fileID := ulid.Make().String()
+	dataPath := filepath.Join(config.Get().StoragePath, ".data", fileID)
+	if err := os.MkdirAll(dataPath, 0755); err != nil {
+		return nil, nil, 0, fs.ToErrno(err)
 	}
-
+	physicalPath := filepath.Join(dataPath, name)
+	f, err := os.OpenFile(physicalPath, int(flags)|os.O_CREATE, os.FileMode(mode))
+	if err != nil {
+		rootLogger.Printf("Error creating physical file: %v", err)
+		return nil, nil, 0, fs.ToErrno(err)
+	}
+	err = db.Get().Queries.InsertFile(ctx, gen.InsertFileParams{
+		ID:          fileID,
+		OrigName:    name,
+		Size:        0,
+		Mode:        int64(mode),
+		MtimeCached: time.Now().Unix(),
+		MetaJson:    sql.NullString{String: "{}", Valid: true},
+	})
+	if err != nil {
+		err := f.Close()
+		if err != nil {
+			rootLogger.Printf("Error closing physical file: %v", err)
+			return nil, nil, 0, 0
+		}
+		err = os.Remove(physicalPath)
+		if err != nil {
+			rootLogger.Printf("Error removing physical file: %v", err)
+			return nil, nil, 0, 0
+		}
+		rootLogger.Printf("Error inserting file into DB: %v", err)
+		return nil, nil, 0, syscall.EIO
+	}
+	childNode := &passthroughNode{Path: physicalPath}
+	childInode := n.NewPersistentInode(ctx, childNode, fs.StableAttr{Mode: mode})
 	wrappedFh := &rootFileHandle{
-		FileHandle: inboxFh,
-		rootNode:   n,
-		name:       name,
+		file:     f,
+		rootNode: n,
+		name:     name,
+		fileID:   fileID,
 	}
-
-	return childInode, wrappedFh, sysFlags, 0
+	return childInode, wrappedFh, 0, 0
 }
 
 func (n *RootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
-	rootLogger.Printf("Forwarding %s to the inbox", name)
-	childInode, errno := n.inboxNode.Mkdir(ctx, name, mode, out)
-	if errno != 0 {
-		return nil, errno
+	rootLogger.Printf("Ingesting new directory at root: %s", name)
+	dirID := ulid.Make().String()
+	err := db.Get().Queries.InsertDynamicDirectory(ctx, gen.InsertDynamicDirectoryParams{
+		ID:        dirID,
+		ParentID:  sql.NullString{Valid: false},
+		Name:      name,
+		CreatedAt: time.Now().Unix(),
+	})
+	if err != nil {
+		rootLogger.Printf("Error inserting directory into DB: %v", err)
+		return nil, syscall.EIO
 	}
+
+	childNode := &fs.Inode{}
+	childInode := n.NewPersistentInode(ctx, childNode, fs.StableAttr{Mode: syscall.S_IFDIR | mode})
 
 	out.EntryValid = 0
 	out.AttrValid = 0
 	go func() {
 		n.RmChild(name)
-		errno = n.NotifyEntry(name)
+		errno := n.NotifyEntry(name)
 		if errno != 0 {
 			rootLogger.Printf("Error notifying entry %q: %v", name, errno)
 		}
@@ -101,45 +146,54 @@ func (n *RootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fus
 }
 
 type rootFileHandle struct {
-	fs.FileHandle
+	file     *os.File
 	rootNode *RootNode
 	name     string
+	fileID   string
 }
 
-func (fh *rootFileHandle) Write(ctx context.Context, data []byte, off int64) (uint32, syscall.Errno) {
-	if writer, ok := fh.FileHandle.(fs.FileWriter); ok {
-		return writer.Write(ctx, data, off)
+func (fh *rootFileHandle) Write(_ context.Context, data []byte, off int64) (uint32, syscall.Errno) {
+	written, err := fh.file.WriteAt(data, off)
+	if err != nil {
+		return uint32(written), fs.ToErrno(err)
 	}
-	return 0, syscall.ENOSYS
+	return uint32(written), 0
 }
 
-func (fh *rootFileHandle) Read(ctx context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
-	if reader, ok := fh.FileHandle.(fs.FileReader); ok {
-		return reader.Read(ctx, dest, off)
+func (fh *rootFileHandle) Read(_ context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
+	readBytes, err := fh.file.ReadAt(dest, off)
+	if err != nil && err.Error() != "EOF" {
+		return nil, fs.ToErrno(err)
 	}
-	return nil, syscall.ENOSYS
+	return fuse.ReadResultData(dest[:readBytes]), 0
 }
 
-func (fh *rootFileHandle) Flush(ctx context.Context) syscall.Errno {
-	if flusher, ok := fh.FileHandle.(fs.FileFlusher); ok {
-		return flusher.Flush(ctx)
+func (fh *rootFileHandle) Flush(_ context.Context) syscall.Errno {
+	err := fh.file.Sync()
+	if err != nil {
+		return fs.ToErrno(err)
 	}
 	return 0
 }
 
-func (fh *rootFileHandle) Allocate(ctx context.Context, off uint64, size uint64, mode uint32) syscall.Errno {
-	if allocator, ok := fh.FileHandle.(fs.FileAllocater); ok {
-		return allocator.Allocate(ctx, off, size, mode)
-	}
-	return syscall.ENOSYS
-}
-
 func (fh *rootFileHandle) Release(ctx context.Context) syscall.Errno {
-	rootLogger.Printf("Releasing %s", fh.name)
-	var err syscall.Errno
-	if releaser, ok := fh.FileHandle.(fs.FileReleaser); ok {
-		err = releaser.Release(ctx)
+	rootLogger.Printf("Releasing ingested file: %s (ID: %s)", fh.name, fh.fileID)
+
+	info, err := fh.file.Stat()
+	if err != nil {
+		rootLogger.Printf("Error reading stats for file %s: %v", fh.name, err)
+	} else {
+		dbErr := db.Get().Queries.UpdateFileStats(ctx, gen.UpdateFileStatsParams{
+			Size:        info.Size(),
+			MtimeCached: info.ModTime().Unix(),
+			Mode:        int64(info.Mode()),
+			ID:          fh.fileID,
+		})
+		if dbErr != nil {
+			rootLogger.Printf("Error updating DB stats for file %s: %v", fh.name, dbErr)
+		}
 	}
+	closeErr := fh.file.Close()
 
 	go func() {
 		fh.rootNode.RmChild(fh.name)
@@ -149,14 +203,16 @@ func (fh *rootFileHandle) Release(ctx context.Context) syscall.Errno {
 		}
 	}()
 
-	return err
+	if closeErr != nil {
+		return fs.ToErrno(closeErr)
+	}
+	return fs.OK
 }
 
-var _ = (fs.NodeMkdirer)((*passthroughNode)(nil))
+var _ = (fs.NodeMkdirer)((*RootNode)(nil))
 var _ = (fs.NodeCreater)((*RootNode)(nil))
 
 var _ fs.FileWriter = (*rootFileHandle)(nil)
 var _ fs.FileReader = (*rootFileHandle)(nil)
 var _ fs.FileFlusher = (*rootFileHandle)(nil)
-var _ fs.FileAllocater = (*rootFileHandle)(nil)
 var _ fs.FileReleaser = (*rootFileHandle)(nil)
