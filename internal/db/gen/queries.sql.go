@@ -95,6 +95,22 @@ func (q *Queries) InsertTag(ctx context.Context, arg InsertTagParams) error {
 	return err
 }
 
+const renameNode = `-- name: RenameNode :exec
+UPDATE nodes
+SET orig_name = ?
+WHERE id = ?
+`
+
+type RenameNodeParams struct {
+	OrigName string
+	ID       string
+}
+
+func (q *Queries) RenameNode(ctx context.Context, arg RenameNodeParams) error {
+	_, err := q.db.ExecContext(ctx, renameNode, arg.OrigName, arg.ID)
+	return err
+}
+
 const updateNodeMode = `-- name: UpdateNodeMode :exec
 UPDATE nodes
 SET mode = ?
