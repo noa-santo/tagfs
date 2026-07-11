@@ -14,19 +14,15 @@ type DirectoryTag struct {
 }
 
 type DynamicDirectory struct {
-	ID        string
-	ParentID  sql.NullString
-	Name      string
-	CreatedAt int64
+	ID       string
+	ParentID sql.NullString
+	Name     string
 }
 
 type File struct {
-	ID          string
-	OrigName    string
-	Mode        int64
-	Size        int64
-	MtimeCached int64
-	MetaJson    sql.NullString
+	ID       string
+	OrigName string
+	Mode     int64
 }
 
 type FileTag struct {

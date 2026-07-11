@@ -35,7 +35,7 @@ func (db *DB) GetFilesForDir(ctx context.Context, selectedTags []string) ([]gen.
 	}
 
 	query := fmt.Sprintf(`
-		SELECT f.id, f.orig_name, f.size, f.mtime_cached, f.meta_json
+		SELECT f.id, f.orig_name, f.mode
 		FROM files f
 		JOIN file_tags ft ON f.id = ft.file_id
 		WHERE ft.tag_name IN (%s)
@@ -59,7 +59,7 @@ func (db *DB) GetFilesForDir(ctx context.Context, selectedTags []string) ([]gen.
 	var files []gen.File
 	for rows.Next() {
 		var f gen.File
-		err := rows.Scan(&f.ID, &f.OrigName, &f.Size, &f.MtimeCached, &f.MetaJson)
+		err := rows.Scan(&f.ID, &f.OrigName, &f.Mode)
 		if err != nil {
 			return nil, fmt.Errorf("scanning file row: %w", err)
 		}
@@ -71,4 +71,51 @@ func (db *DB) GetFilesForDir(ctx context.Context, selectedTags []string) ([]gen.
 	}
 
 	return files, nil
+}
+
+func (db *DB) UpdateTags(id string, tags []string) error {
+	tx, err := db.db.BeginTx(db.Ctx, nil)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	committed := false
+	defer func(tx *sql.Tx, committed *bool) {
+		if *committed {
+			return
+		}
+		err := tx.Rollback()
+		if err != nil {
+			dbLogger.Fatalf("Error while rolling back transaction: %v", err)
+		}
+	}(tx, &committed)
+	qtx := db.Queries.WithTx(tx)
+
+	err = qtx.ClearFileTags(db.Ctx, id)
+	if err != nil {
+		return fmt.Errorf("clearing existing tags: %w", err)
+	}
+
+	seen := make(map[string]struct{})
+	for _, tag := range tags {
+		if tag == "" {
+			continue
+		}
+		if _, exists := seen[tag]; exists {
+			continue
+		}
+		seen[tag] = struct{}{}
+		err = qtx.InsertFileTag(db.Ctx, gen.InsertFileTagParams{
+			FileID:  id,
+			TagName: tag,
+		})
+		if err != nil {
+			return fmt.Errorf("inserting tag %q: %w", tag, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing transaction: %w", err)
+	}
+	committed = true
+
+	return nil
 }

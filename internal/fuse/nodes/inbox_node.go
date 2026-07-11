@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/hanwen/go-fuse/v2/fs"
@@ -23,6 +22,7 @@ type inboxNode struct {
 	fs.Inode
 }
 
+// TODO: optimize inbox node
 func categorizedFileIDs(ctx context.Context, dirConfigs []config.DirectoryConfig) (map[string]bool, error) {
 	matched := make(map[string]bool)
 	var walk func([]config.DirectoryConfig) error
@@ -121,17 +121,31 @@ var _ fs.NodeGetattrer = (*inboxNode)(nil)
 
 func buildInboxEntry(f gen.File) (InboxEntry, error) {
 	physicalPath := filepath.Join(config.Get().StoragePath, ".data", f.ID, f.OrigName)
-	mimeTypeRaw, err := mimetype.DetectFile(physicalPath)
+	entryInfo, err := os.Stat(physicalPath)
 	if err != nil {
-		inboxLogger.Printf("Error detecting mime type for %s: %v", physicalPath, err)
+		inboxLogger.Printf("Error reading inbox: %v", err)
 		return InboxEntry{}, err
 	}
+
+	var mimeType string
+	if !entryInfo.IsDir() {
+		mimeTypeRaw, err := mimetype.DetectFile(physicalPath)
+		if err != nil {
+			inboxLogger.Printf("Error detecting mime type: %v", err)
+			return InboxEntry{}, err
+		}
+		mimeType = mimeTypeRaw.String()
+	} else {
+		mimeType = "inode/directory"
+	}
+
 	return InboxEntry{
 		Name:       f.OrigName,
-		IsDir:      false,
-		ModifiedAt: time.Unix(f.MtimeCached, 0).Format("02.01.2006 15:04:05"),
-		Size:       f.Size,
-		MimeType:   mimeTypeRaw.String(),
+		IsDir:      entryInfo.IsDir(),
+		ModifiedAt: entryInfo.ModTime().Format("02.01.2006 15:04:05"),
+		Size:       entryInfo.Size(),
+		MimeType:   mimeType,
+		UID:        f.ID,
 	}, nil
 }
 
@@ -152,16 +166,10 @@ func GetInboxEntries() ([]InboxEntry, error) {
 	return entries, nil
 }
 
-func GetInboxEntry(filename string) (InboxEntry, error) {
-	files, err := uncategorizedFiles(context.Background())
+func GetInboxEntry(uid string) (InboxEntry, error) {
+	file, err := db.Get().Queries.GetFile(db.Get().Ctx, uid)
 	if err != nil {
-		inboxLogger.Printf("Error reading inbox: %v", err)
 		return InboxEntry{}, err
 	}
-	for _, f := range files {
-		if f.OrigName == filename {
-			return buildInboxEntry(f)
-		}
-	}
-	return InboxEntry{}, os.ErrNotExist
+	return buildInboxEntry(file)
 }

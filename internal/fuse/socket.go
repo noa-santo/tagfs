@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/noa-santo/tagfs/internal/db"
 	"github.com/noa-santo/tagfs/internal/fuse/nodes"
 	"github.com/noa-santo/tagfs/internal/logic"
 )
@@ -120,13 +121,13 @@ func handleGetImplicitTags(conn net.Conn, reader *bufio.Reader) {
 }
 
 func handleGetSuggestions(conn net.Conn, reader *bufio.Reader) {
-	fileNameString, err := reader.ReadString('\n')
+	uidString, err := reader.ReadString('\n')
 	if err != nil {
-		logger.Printf("Error reading file name: %v", err)
+		logger.Printf("Error reading uid: %v", err)
 		return
 	}
-	fileName := strings.TrimSuffix(fileNameString, "\n")
-	entry, err := nodes.GetInboxEntry(fileName)
+	uid := strings.TrimSuffix(uidString, "\n")
+	entry, err := nodes.GetInboxEntry(uid)
 	if err != nil {
 		logger.Printf("Error reading inbox entry: %v", err)
 		return
@@ -183,12 +184,23 @@ func handleUpdateTags(conn net.Conn, reader *bufio.Reader) {
 		return
 	}
 	logger.Printf("Updating tags: %v", tagMap)
+
+	for uid, tags := range tagMap {
+		err := db.Get().UpdateTags(uid, tags)
+		if err != nil {
+			_, writeErr := conn.Write([]byte("ERROR" + err.Error() + "\n"))
+			if writeErr != nil {
+				logger.Printf("Error writing response: %v", writeErr)
+			}
+			return
+		}
+	}
+
 	_, err = conn.Write([]byte("OK\n"))
 	if err != nil {
 		logger.Printf("Error writing response: %v", err)
 		return
 	}
-	// todo: actually update tags
 }
 
 func handleConnection(conn net.Conn) {

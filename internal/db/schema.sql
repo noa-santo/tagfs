@@ -1,10 +1,7 @@
 CREATE TABLE files (
     id TEXT PRIMARY KEY,           -- ULID
     orig_name TEXT NOT NULL,       -- e.g., "report.pdf"
-    mode INTEGER NOT NULL,         -- mode for inode creation
-    size INTEGER NOT NULL,
-    mtime_cached INTEGER NOT NULL, -- Epoch, useful for fast FUSE stat() calls
-    meta_json TEXT                 -- Extracted metadata, mime type, etc.
+    mode INTEGER NOT NULL         -- mode for inode creation
 );
 
 CREATE TABLE file_tags (
@@ -17,8 +14,7 @@ CREATE TABLE file_tags (
 CREATE TABLE dynamic_directories (
     id TEXT PRIMARY KEY,           -- ULID for the directory
     parent_id TEXT,                -- Can refer to another dynamic dir or a static config path
-    name TEXT NOT NULL,            -- e.g., "vacation_photos"
-    created_at INTEGER NOT NULL
+    name TEXT NOT NULL             -- e.g., "vacation_photos"
 );
 
 CREATE TABLE directory_tags (

@@ -10,8 +10,17 @@ import (
 	"database/sql"
 )
 
+const clearFileTags = `-- name: ClearFileTags :exec
+DELETE FROM file_tags WHERE file_id = ?
+`
+
+func (q *Queries) ClearFileTags(ctx context.Context, fileID string) error {
+	_, err := q.db.ExecContext(ctx, clearFileTags, fileID)
+	return err
+}
+
 const getAllFiles = `-- name: GetAllFiles :many
-SELECT id, orig_name, mode, size, mtime_cached, meta_json FROM files
+SELECT id, orig_name, mode FROM files
 `
 
 func (q *Queries) GetAllFiles(ctx context.Context) ([]File, error) {
@@ -23,14 +32,7 @@ func (q *Queries) GetAllFiles(ctx context.Context) ([]File, error) {
 	var items []File
 	for rows.Next() {
 		var i File
-		if err := rows.Scan(
-			&i.ID,
-			&i.OrigName,
-			&i.Mode,
-			&i.Size,
-			&i.MtimeCached,
-			&i.MetaJson,
-		); err != nil {
+		if err := rows.Scan(&i.ID, &i.OrigName, &i.Mode); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -44,73 +46,75 @@ func (q *Queries) GetAllFiles(ctx context.Context) ([]File, error) {
 	return items, nil
 }
 
+const getFile = `-- name: GetFile :one
+SELECT id, orig_name, mode FROM files WHERE id = ?
+`
+
+func (q *Queries) GetFile(ctx context.Context, id string) (File, error) {
+	row := q.db.QueryRowContext(ctx, getFile, id)
+	var i File
+	err := row.Scan(&i.ID, &i.OrigName, &i.Mode)
+	return i, err
+}
+
 const insertDynamicDirectory = `-- name: InsertDynamicDirectory :exec
-INSERT INTO dynamic_directories (id, parent_id, name, created_at)
-VALUES (?, ?, ?, ?)
+INSERT INTO dynamic_directories (id, parent_id, name)
+VALUES (?, ?, ?)
 `
 
 type InsertDynamicDirectoryParams struct {
-	ID        string
-	ParentID  sql.NullString
-	Name      string
-	CreatedAt int64
+	ID       string
+	ParentID sql.NullString
+	Name     string
 }
 
 func (q *Queries) InsertDynamicDirectory(ctx context.Context, arg InsertDynamicDirectoryParams) error {
-	_, err := q.db.ExecContext(ctx, insertDynamicDirectory,
-		arg.ID,
-		arg.ParentID,
-		arg.Name,
-		arg.CreatedAt,
-	)
+	_, err := q.db.ExecContext(ctx, insertDynamicDirectory, arg.ID, arg.ParentID, arg.Name)
 	return err
 }
 
 const insertFile = `-- name: InsertFile :exec
-INSERT INTO files (id, orig_name, mode, size, mtime_cached, meta_json)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO files (id, orig_name, mode)
+VALUES (?, ?, ?)
 `
 
 type InsertFileParams struct {
-	ID          string
-	OrigName    string
-	Mode        int64
-	Size        int64
-	MtimeCached int64
-	MetaJson    sql.NullString
+	ID       string
+	OrigName string
+	Mode     int64
 }
 
 func (q *Queries) InsertFile(ctx context.Context, arg InsertFileParams) error {
-	_, err := q.db.ExecContext(ctx, insertFile,
-		arg.ID,
-		arg.OrigName,
-		arg.Mode,
-		arg.Size,
-		arg.MtimeCached,
-		arg.MetaJson,
-	)
+	_, err := q.db.ExecContext(ctx, insertFile, arg.ID, arg.OrigName, arg.Mode)
+	return err
+}
+
+const insertFileTag = `-- name: InsertFileTag :exec
+INSERT INTO file_tags (file_id, tag_name) VALUES (?, ?)
+`
+
+type InsertFileTagParams struct {
+	FileID  string
+	TagName string
+}
+
+func (q *Queries) InsertFileTag(ctx context.Context, arg InsertFileTagParams) error {
+	_, err := q.db.ExecContext(ctx, insertFileTag, arg.FileID, arg.TagName)
 	return err
 }
 
 const updateFileStats = `-- name: UpdateFileStats :exec
 UPDATE files
-SET size = ?, mtime_cached = ?, mode = ?
+SET mode = ?
 WHERE id = ?
 `
 
 type UpdateFileStatsParams struct {
-	Size        int64
-	MtimeCached int64
-	Mode        int64
-	ID          string
+	Mode int64
+	ID   string
 }
 
 func (q *Queries) UpdateFileStats(ctx context.Context, arg UpdateFileStatsParams) error {
-	_, err := q.db.ExecContext(ctx, updateFileStats,
-		arg.Size,
-		arg.MtimeCached,
-		arg.Mode,
-		arg.ID,
-	)
+	_, err := q.db.ExecContext(ctx, updateFileStats, arg.Mode, arg.ID)
 	return err
 }

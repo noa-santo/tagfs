@@ -6,4 +6,5 @@ type InboxEntry struct {
 	ModifiedAt string `json:"modified_at"`
 	Size       int64  `json:"size"`
 	MimeType   string `json:"mime_type"`
+	UID        string `json:"uid"`
 }

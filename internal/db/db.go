@@ -24,7 +24,7 @@ var globalDBInstance *DB
 type DB struct {
 	db      *sql.DB
 	Queries *gen.Queries
-	ctx     context.Context
+	Ctx     context.Context
 }
 
 func Get() *DB {
@@ -52,7 +52,7 @@ func initDB() {
 	globalDBInstance = &DB{
 		db:      db,
 		Queries: queries,
-		ctx:     ctx,
+		Ctx:     ctx,
 	}
 }
 

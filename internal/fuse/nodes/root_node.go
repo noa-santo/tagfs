@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
@@ -79,12 +78,9 @@ func (n *RootNode) Create(ctx context.Context, name string, flags uint32, mode u
 		return nil, nil, 0, fs.ToErrno(err)
 	}
 	err = db.Get().Queries.InsertFile(ctx, gen.InsertFileParams{
-		ID:          fileID,
-		OrigName:    name,
-		Size:        0,
-		Mode:        int64(mode),
-		MtimeCached: time.Now().Unix(),
-		MetaJson:    sql.NullString{String: "{}", Valid: true},
+		ID:       fileID,
+		OrigName: name,
+		Mode:     int64(mode),
 	})
 	if err != nil {
 		err := f.Close()
@@ -115,10 +111,9 @@ func (n *RootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fus
 	rootLogger.Printf("Ingesting new directory at root: %s", name)
 	dirID := ulid.Make().String()
 	err := db.Get().Queries.InsertDynamicDirectory(ctx, gen.InsertDynamicDirectoryParams{
-		ID:        dirID,
-		ParentID:  sql.NullString{Valid: false},
-		Name:      name,
-		CreatedAt: time.Now().Unix(),
+		ID:       dirID,
+		ParentID: sql.NullString{Valid: false},
+		Name:     name,
 	})
 	if err != nil {
 		rootLogger.Printf("Error inserting directory into DB: %v", err)
@@ -180,10 +175,8 @@ func (fh *rootFileHandle) Release(ctx context.Context) syscall.Errno {
 		rootLogger.Printf("Error reading stats for file %s: %v", fh.name, err)
 	} else {
 		dbErr := db.Get().Queries.UpdateFileStats(ctx, gen.UpdateFileStatsParams{
-			Size:        info.Size(),
-			MtimeCached: info.ModTime().Unix(),
-			Mode:        int64(info.Mode()),
-			ID:          fh.fileID,
+			Mode: int64(info.Mode()),
+			ID:   fh.fileID,
 		})
 		if dbErr != nil {
 			rootLogger.Printf("Error updating DB stats for file %s: %v", fh.name, dbErr)

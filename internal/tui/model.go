@@ -102,7 +102,7 @@ func (m model) setSuggestionState() (model, tea.Cmd) {
 		return m, nil
 	}
 
-	currentSuggestion, err := getSuggestions(m.socketPath, m.items[m.cursor].Name)
+	currentSuggestion, err := getSuggestions(m.socketPath, m.items[m.cursor].UID)
 	if err != nil {
 		return m.showToast(fmt.Sprintf("could not get suggestions: %s", err.Error()), true)
 	}
@@ -113,8 +113,8 @@ func (m model) setSuggestionState() (model, tea.Cmd) {
 	}
 
 	for _, t := range currentSuggestion.CommonTags {
-		compatible, _ := isTagCompatible(m.socketPath, t, m.pendingTags[m.items[m.cursor].Name])
-		if slices.Contains(m.pendingTags[m.items[m.cursor].Name], t) || !compatible {
+		compatible, _ := isTagCompatible(m.socketPath, t, m.pendingTags[m.items[m.cursor].UID])
+		if slices.Contains(m.pendingTags[m.items[m.cursor].UID], t) || !compatible {
 			continue
 		}
 		state.common = append(state.common, selectableTag{name: t, selected: true})
@@ -123,8 +123,8 @@ func (m model) setSuggestionState() (model, tea.Cmd) {
 	for _, optGroup := range currentSuggestion.Options {
 		var opt []selectableTag
 		for _, t := range optGroup {
-			compatible, _ := isTagCompatible(m.socketPath, t, m.pendingTags[m.items[m.cursor].Name])
-			if slices.Contains(m.pendingTags[m.items[m.cursor].Name], t) || !compatible {
+			compatible, _ := isTagCompatible(m.socketPath, t, m.pendingTags[m.items[m.cursor].UID])
+			if slices.Contains(m.pendingTags[m.items[m.cursor].UID], t) || !compatible {
 				continue
 			}
 			opt = append(opt, selectableTag{name: t, selected: false})
@@ -138,7 +138,7 @@ func (m model) setSuggestionState() (model, tea.Cmd) {
 		state.cursorGroup = 0
 	}
 
-	m.suggestions[m.items[m.cursor].Name] = state
+	m.suggestions[m.items[m.cursor].UID] = state
 
 	return m, nil
 }
@@ -173,7 +173,7 @@ func (m model) currentSuggestionState() *suggestionState {
 	if !ok {
 		return nil
 	}
-	return m.suggestions[item.Name]
+	return m.suggestions[item.UID]
 }
 
 func (m model) hasSuggestions() bool {
@@ -198,7 +198,7 @@ func (m model) prevFocus(from focusArea) focusArea {
 }
 
 func (m model) itemNeedsTarget(item InboxEntry) bool {
-	tags := m.pendingTags[item.Name]
+	tags := m.pendingTags[item.UID]
 	if len(tags) == 0 {
 		return true
 	}
@@ -235,7 +235,7 @@ func (m model) afterTagsChanged(itemName string) (model, tea.Cmd) {
 
 	m.targets[itemName] = target
 
-	if item, sel := m.selectedItem(); sel && item.Name == itemName {
+	if item, sel := m.selectedItem(); sel && item.UID == itemName {
 		if idx, found := m.findNextUntargeted(m.cursor); found {
 			m.cursor = idx
 		}
@@ -297,11 +297,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if tag == "" {
 						return m.showToast("tag cannot be empty", true)
 					}
-					if slices.Contains(m.pendingTags[item.Name], tag) {
+					if slices.Contains(m.pendingTags[item.UID], tag) {
 						return m.showToast(fmt.Sprintf("Tag '%s' already exists", tag), true)
 					}
-					if len(m.pendingTags[item.Name]) > 0 {
-						compatible, err := isTagCompatible(m.socketPath, tag, m.pendingTags[item.Name])
+					if len(m.pendingTags[item.UID]) > 0 {
+						compatible, err := isTagCompatible(m.socketPath, tag, m.pendingTags[item.UID])
 						if err != nil {
 							return m.showToast(fmt.Sprintf("could not check compatibility: %s", err.Error()), true)
 						}
@@ -309,26 +309,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							return m.showToast(fmt.Sprintf("tag '%s' is not compatible with existing tags", tag), true)
 						}
 					}
-					m.pendingTags[item.Name] = append(m.pendingTags[item.Name], tag)
+					m.pendingTags[item.UID] = append(m.pendingTags[item.UID], tag)
 					m.tagInput.SetValue("")
-					sort.Strings(m.pendingTags[item.Name])
+					sort.Strings(m.pendingTags[item.UID])
 					var err error
-					m.implicitPendingTags[item.Name], err = getImplicitTags(m.socketPath, m.pendingTags[item.Name])
+					m.implicitPendingTags[item.UID], err = getImplicitTags(m.socketPath, m.pendingTags[item.UID])
 					if err != nil {
 						return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
 					}
-					return m.afterTagsChanged(item.Name)
+					return m.afterTagsChanged(item.UID)
 				}
 
 			case "delete":
 				if m.tagInput.CurrentSuggestion() != "" {
 					if item, ok := m.selectedItem(); ok {
-						if !slices.Contains(m.pendingTags[item.Name], m.tagInput.CurrentSuggestion()) {
+						if !slices.Contains(m.pendingTags[item.UID], m.tagInput.CurrentSuggestion()) {
 							return m.showToast("tag is not pending so it cannot be removed", true)
 						}
-						m.pendingTags[item.Name] = remove(m.pendingTags[item.Name], m.tagInput.CurrentSuggestion())
+						m.pendingTags[item.UID] = remove(m.pendingTags[item.UID], m.tagInput.CurrentSuggestion())
 						var err error
-						m.implicitPendingTags[item.Name], err = getImplicitTags(m.socketPath, m.pendingTags[item.Name])
+						m.implicitPendingTags[item.UID], err = getImplicitTags(m.socketPath, m.pendingTags[item.UID])
 						if err != nil {
 							return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
 						}
@@ -419,7 +419,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			state := m.suggestions[item.Name]
+			state := m.suggestions[item.UID]
 			if state == nil {
 				return m, nil
 			}
@@ -510,25 +510,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case "enter":
 				for _, t := range state.common {
-					if t.selected && !slices.Contains(m.pendingTags[item.Name], t.name) {
-						m.pendingTags[item.Name] = append(m.pendingTags[item.Name], t.name)
+					if t.selected && !slices.Contains(m.pendingTags[item.UID], t.name) {
+						m.pendingTags[item.UID] = append(m.pendingTags[item.UID], t.name)
 					}
 				}
 				for _, group := range state.options {
 					for _, t := range group {
-						if t.selected && !slices.Contains(m.pendingTags[item.Name], t.name) {
-							m.pendingTags[item.Name] = append(m.pendingTags[item.Name], t.name)
+						if t.selected && !slices.Contains(m.pendingTags[item.UID], t.name) {
+							m.pendingTags[item.UID] = append(m.pendingTags[item.UID], t.name)
 						}
 					}
 				}
 
-				sort.Strings(m.pendingTags[item.Name])
+				sort.Strings(m.pendingTags[item.UID])
 				var err error
-				m.implicitPendingTags[item.Name], err = getImplicitTags(m.socketPath, m.pendingTags[item.Name])
+				m.implicitPendingTags[item.UID], err = getImplicitTags(m.socketPath, m.pendingTags[item.UID])
 				if err != nil {
 					return m.showToast(fmt.Sprintf("could not get implicit tags: %s", err.Error()), true)
 				}
-				return m.afterTagsChanged(item.Name)
+				return m.afterTagsChanged(item.UID)
 			}
 			return m, nil
 		}
@@ -582,9 +582,9 @@ func (m model) listPanel(width, height int) string {
 			line := fmt.Sprintf("%s %s", icon, item.Name)
 
 			tagInfo := ""
-			if tags := m.pendingTags[item.Name]; len(tags) > 0 {
+			if tags := m.pendingTags[item.UID]; len(tags) > 0 {
 				tagInfo = fmt.Sprintf("%s %d", iconTag, len(tags))
-				if target, ok := m.targets[item.Name]; ok {
+				if target, ok := m.targets[item.UID]; ok {
 					tagInfo += fmt.Sprintf(" -> %s", target.Path)
 				}
 			}
@@ -645,12 +645,12 @@ func (m model) detailPanel(width, height int) string {
 	b.WriteString(rowDimStyle.Render(info) + "\n\n")
 
 	b.WriteString(sectionLabelStyle.Render(iconTags+" PENDING TAGS") + "\n")
-	if tags := m.pendingTags[item.Name]; len(tags) > 0 {
+	if tags := m.pendingTags[item.UID]; len(tags) > 0 {
 		chips := make([]string, len(tags))
 		for i, t := range tags {
 			chips[i] = tagChipStyle.Render(iconTag + " " + t)
 		}
-		if implicitTags := m.implicitPendingTags[item.Name]; len(implicitTags) > 0 {
+		if implicitTags := m.implicitPendingTags[item.UID]; len(implicitTags) > 0 {
 			for _, t := range implicitTags {
 				chips = append(chips, implicitTagChipStyle.Render(iconMagic+" "+t))
 			}
@@ -662,7 +662,7 @@ func (m model) detailPanel(width, height int) string {
 
 	b.WriteString("\n" + sectionLabelStyle.Render(iconMagic+" SUGGESTED TAGS") + "\n")
 
-	state, hasSuggestions := m.suggestions[item.Name]
+	state, hasSuggestions := m.suggestions[item.UID]
 	if !hasSuggestions || (len(state.options) == 0 && len(state.common) == 0) {
 		b.WriteString(emptyHintStyle.Render("no suggestions available") + "\n\n")
 	} else {
