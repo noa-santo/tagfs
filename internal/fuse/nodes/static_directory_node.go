@@ -41,12 +41,13 @@ func (n *staticDirectoryNode) Readdir(ctx context.Context) (fs.DirStream, syscal
 
 	result := make([]fuse.DirEntry, 0, len(nodes)+len(n.nodeConfig.Subdirectories))
 
-	for name, child := range n.Children() {
+	for _, child := range n.nodeConfig.Subdirectories {
+		name := child.Name
 		if n.isSubdir(name) {
 			result = append(result, fuse.DirEntry{
 				Name: name,
-				Ino:  child.StableAttr().Ino,
-				Mode: child.Mode(),
+				Ino:  0,
+				Mode: uint32(syscall.S_IFDIR | 0755),
 			})
 		}
 	}
@@ -63,6 +64,18 @@ func (n *staticDirectoryNode) Readdir(ctx context.Context) (fs.DirStream, syscal
 func (n *staticDirectoryNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	if child := n.GetChild(name); child != nil {
 		return child, fs.OK
+	}
+
+	for _, subdir := range n.nodeConfig.Subdirectories {
+		if subdir.Name == name {
+			childNode := &staticDirectoryNode{
+				nodeConfig: subdir,
+			}
+			childInode := n.NewInode(ctx, childNode, fs.StableAttr{
+				Mode: uint32(syscall.S_IFDIR | 0755),
+			})
+			return childInode, fs.OK
+		}
 	}
 
 	nodes, err := db.Get().GetNodesForDir(ctx, n.nodeConfig.Tags)
@@ -104,7 +117,7 @@ func (n *staticDirectoryNode) Mkdir(ctx context.Context, name string, mode uint3
 			return nil, syscall.EINVAL
 		}
 	}
-	if child := n.GetChild(name); child != nil {
+	if child := n.GetChild(name); child != nil || n.isSubdir(name) {
 		return nil, syscall.EEXIST
 	}
 	staticDirLogger.Printf("Ingesting new directory at %s: %s", n.nodeConfig.Name, name)
@@ -140,7 +153,7 @@ func (n *staticDirectoryNode) Mkdir(ctx context.Context, name string, mode uint3
 }
 
 func (n *staticDirectoryNode) Rmdir(ctx context.Context, name string) syscall.Errno {
-	if child := n.GetChild(name); child != nil && n.isSubdir(name) {
+	if n.isSubdir(name) {
 		return syscall.EPERM
 	}
 	nodes, err := db.Get().GetNodesForDir(ctx, n.nodeConfig.Tags)
@@ -171,7 +184,7 @@ func (n *staticDirectoryNode) Rename(ctx context.Context, name string, newParent
 		// RENAME_NOREPLACE / RENAME_EXCHANGE aren't supported by the tag-based store yet.
 		return syscall.ENOSYS
 	}
-	if child := n.GetChild(name); child != nil && n.isSubdir(name) {
+	if n.isSubdir(name) {
 		return syscall.EPERM
 	}
 
@@ -308,7 +321,7 @@ func (n *staticDirectoryNode) Access(context.Context, uint32) syscall.Errno {
 }
 
 func (n *staticDirectoryNode) Unlink(ctx context.Context, name string) syscall.Errno {
-	if child := n.GetChild(name); child != nil && n.isSubdir(name) {
+	if n.isSubdir(name) {
 		return syscall.EPERM
 	}
 	nodes, err := db.Get().GetNodesForDir(ctx, n.nodeConfig.Tags)
@@ -335,7 +348,7 @@ func (n *staticDirectoryNode) Symlink(ctx context.Context, target, name string, 
 	if !n.nodeConfig.Rules.AllowFileCreation {
 		return nil, syscall.EPERM
 	}
-	if n.GetChild(name) != nil {
+	if n.GetChild(name) != nil || n.isSubdir(name) {
 		return nil, syscall.EEXIST
 	}
 	if n.nodeConfig.Rules.ForceNamePattern {
