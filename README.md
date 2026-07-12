@@ -10,15 +10,16 @@ Making my home dir a FUSE is also kinda cool because that lets me program specia
 do in the future.
 
 Currently, it's a work in progress.
-Data loss is possible (and currently tbh pretty likely).
+Data loss is possible (and tbh currently pretty likely).
 
 ### Features
 
 - [x] Configurable home dir layout with nix home manager
 - [x] Automatically move files into the "Inbox" dir when created in the home dir
 - [x] Passthrough dirs for e.g., .config and .cache
-- [x] Tag suggestion based on mime type and file name patterns
 - [x] Modern TUI for managing inbox items
+- [x] Tag suggestion based on mime type and file name patterns
+- [x] Autocomplete for tags when typing
 - [x] Configurable directory rules (e.g., only allow images in the pictures dir): mime type, file name patterns, allow
   subdir creation, allow file creation
 
