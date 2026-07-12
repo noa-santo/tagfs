@@ -52,3 +52,7 @@ All files and dirs are stored structure-less in a store path.
 What tags a dir belongs to is stored in a sqlite database.
 The fuse then dynamically resolves the contents of a dir based on the tags.
 For that a file has to have enough tags to unambiguously infer the dir it belongs to.
+
+### Screenshots
+
+<img width="3836" height="1922" alt="image" src="https://github.com/user-attachments/assets/8cad5ce9-b1ef-414a-b2e2-b554fd6dcd37" />
