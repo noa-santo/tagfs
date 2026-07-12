@@ -21,6 +21,18 @@ type EffectiveRuleDir struct {
 	Rules config.Rules
 }
 
+func MatchesNamePattern(name string, patterns []string) bool {
+	if len(patterns) > 0 {
+		for _, pattern := range patterns {
+			matched, err := regexp.MatchString(pattern, name)
+			if err == nil && matched {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func SuggestTags(entry InboxEntry) *TagSuggestion {
 	dirs := getEffectiveRuleDirs()
 
@@ -61,23 +73,9 @@ func SuggestTags(entry InboxEntry) *TagSuggestion {
 			}
 		}
 
-		nameMatch := false
-		if len(d.Rules.NamePatterns) > 0 {
-			inList := false
-			for _, pattern := range d.Rules.NamePatterns {
-				matched, err := regexp.MatchString(pattern, entry.Name)
-				if err == nil && matched {
-					inList = true
-					break
-				}
-			}
-
-			if d.Rules.ForceNamePattern && !inList {
-				continue
-			}
-			if inList {
-				nameMatch = true
-			}
+		nameMatch := MatchesNamePattern(entry.Name, d.Rules.NamePatterns)
+		if d.Rules.ForceNamePattern && !nameMatch {
+			continue
 		}
 
 		score := 0

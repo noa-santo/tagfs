@@ -99,6 +99,11 @@ func (n *staticDirectoryNode) Mkdir(ctx context.Context, name string, mode uint3
 	if !n.nodeConfig.Rules.AllowSubdirCreation {
 		return nil, syscall.EPERM
 	}
+	if n.nodeConfig.Rules.ForceNamePattern {
+		if !logic.MatchesNamePattern(name, n.nodeConfig.Rules.NamePatterns) {
+			return nil, syscall.EINVAL
+		}
+	}
 	if child := n.GetChild(name); child != nil {
 		return nil, syscall.EEXIST
 	}
@@ -233,6 +238,11 @@ func (n *staticDirectoryNode) Create(ctx context.Context, name string, flags uin
 	if !n.nodeConfig.Rules.AllowFileCreation {
 		return nil, nil, 0, syscall.EPERM
 	}
+	if n.nodeConfig.Rules.ForceNamePattern {
+		if !logic.MatchesNamePattern(name, n.nodeConfig.Rules.NamePatterns) {
+			return nil, nil, 0, syscall.EINVAL
+		}
+	}
 	staticDirLogger.Printf("Ingesting new file at %s: %s", n.nodeConfig.Name, name)
 	fileID := ulid.Make().String()
 	physicalPath := filepath.Join(config.Get().StoragePath, ".data", fileID, name)
@@ -327,6 +337,11 @@ func (n *staticDirectoryNode) Symlink(ctx context.Context, target, name string, 
 	}
 	if n.GetChild(name) != nil {
 		return nil, syscall.EEXIST
+	}
+	if n.nodeConfig.Rules.ForceNamePattern {
+		if !logic.MatchesNamePattern(name, n.nodeConfig.Rules.NamePatterns) {
+			return nil, syscall.EINVAL
+		}
 	}
 	linkID := ulid.Make().String()
 	physicalPath := filepath.Join(config.Get().StoragePath, ".data", linkID, name)
