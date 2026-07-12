@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
@@ -64,7 +65,14 @@ func (n *RootNode) initStaticDirectories(ctx context.Context, parentInode *fs.In
 	}
 }
 
+func (n *RootNode) isProtected(name string) bool {
+	return n.GetChild(name) != nil
+}
+
 func (n *RootNode) Create(ctx context.Context, name string, flags uint32, mode uint32, _ *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
+	if n.isProtected(name) {
+		return nil, nil, 0, syscall.EEXIST
+	}
 	rootLogger.Printf("Ingesting new file at root: %s", name)
 	fileID := ulid.Make().String()
 	dataPath := filepath.Join(config.Get().StoragePath, ".data", fileID)
@@ -108,6 +116,9 @@ func (n *RootNode) Create(ctx context.Context, name string, flags uint32, mode u
 }
 
 func (n *RootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+	if n.isProtected(name) {
+		return nil, syscall.EEXIST
+	}
 	rootLogger.Printf("Ingesting new directory at root: %s", name)
 	dirID := ulid.Make().String()
 	dataPath := filepath.Join(config.Get().StoragePath, ".data", dirID)
@@ -142,6 +153,103 @@ func (n *RootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fus
 	}()
 
 	return childInode, 0
+}
+
+func (n *RootNode) Symlink(ctx context.Context, target, name string, _ *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+	if n.isProtected(name) {
+		return nil, syscall.EEXIST
+	}
+	rootLogger.Printf("Ingesting new symlink at root: %s -> %s", name, target)
+	linkID := ulid.Make().String()
+	dataPath := filepath.Join(config.Get().StoragePath, ".data", linkID)
+	if err := os.MkdirAll(dataPath, 0755); err != nil {
+		return nil, fs.ToErrno(err)
+	}
+	physicalPath := filepath.Join(dataPath, name)
+	if err := os.Symlink(target, physicalPath); err != nil {
+		return nil, fs.ToErrno(err)
+	}
+	err := db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
+		ID:       linkID,
+		OrigName: name,
+		Mode:     logic.ToStoredMode(uint32(syscall.S_IFLNK|0777), false),
+	})
+	if err != nil {
+		_ = os.Remove(physicalPath)
+		rootLogger.Printf("Error inserting symlink into DB: %v", err)
+		return nil, syscall.EIO
+	}
+
+	childNode := &passthroughNode{Path: physicalPath}
+	childInode := n.NewPersistentInode(ctx, childNode, fs.StableAttr{Mode: syscall.S_IFLNK})
+
+	go func() {
+		n.RmChild(name)
+		if errno := n.NotifyEntry(name); errno != 0 {
+			rootLogger.Printf("Error notifying entry %q after symlink: %v", name, errno)
+		}
+	}()
+
+	return childInode, fs.OK
+}
+
+func (n *RootNode) Rmdir(_ context.Context, name string) syscall.Errno {
+	if n.isProtected(name) {
+		return syscall.EPERM
+	}
+	return syscall.ENOENT
+}
+
+func (n *RootNode) Unlink(_ context.Context, name string) syscall.Errno {
+	if n.isProtected(name) {
+		return syscall.EISDIR
+	}
+	return syscall.ENOENT
+}
+
+func (n *RootNode) Rename(_ context.Context, name string, _ fs.InodeEmbedder, _ string, _ uint32) syscall.Errno {
+	if n.isProtected(name) {
+		return syscall.EPERM
+	}
+	return syscall.ENOENT
+}
+
+func (n *RootNode) Link(_ context.Context, _ fs.InodeEmbedder, _ string, _ *fuse.EntryOut) (node *fs.Inode, errno syscall.Errno) {
+	return nil, syscall.EPERM
+}
+
+func (n *RootNode) Mknod(_ context.Context, _ string, _, _ uint32, _ *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+	return nil, syscall.EPERM
+}
+
+func (n *RootNode) Getattr(_ context.Context, _ fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+	out.Mode = syscall.S_IFDIR | 0755
+	out.Nlink = 2
+	now := time.Now()
+	out.SetTimes(&now, &now, &now)
+	return fs.OK
+}
+
+func (n *RootNode) Setattr(context.Context, fs.FileHandle, *fuse.SetAttrIn, *fuse.AttrOut) syscall.Errno {
+	return syscall.EPERM
+}
+
+func (n *RootNode) Access(_ context.Context, _ uint32) syscall.Errno {
+	return fs.OK
+}
+
+func (n *RootNode) Opendir(_ context.Context) syscall.Errno {
+	return fs.OK
+}
+
+func (n *RootNode) Statfs(_ context.Context, out *fuse.StatfsOut) syscall.Errno {
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(config.Get().StoragePath, &st); err != nil {
+		rootLogger.Printf("Statfs: failed for %s: %v", config.Get().StoragePath, err)
+		return fs.ToErrno(err)
+	}
+	out.FromStatfsT(&st)
+	return fs.OK
 }
 
 type rootFileHandle struct {
@@ -208,6 +316,17 @@ func (fh *rootFileHandle) Release(ctx context.Context) syscall.Errno {
 
 var _ = (fs.NodeMkdirer)((*RootNode)(nil))
 var _ = (fs.NodeCreater)((*RootNode)(nil))
+var _ = (fs.NodeSymlinker)((*RootNode)(nil))
+var _ = (fs.NodeRmdirer)((*RootNode)(nil))
+var _ = (fs.NodeUnlinker)((*RootNode)(nil))
+var _ = (fs.NodeRenamer)((*RootNode)(nil))
+var _ = (fs.NodeLinker)((*RootNode)(nil))
+var _ = (fs.NodeMknoder)((*RootNode)(nil))
+var _ = (fs.NodeGetattrer)((*RootNode)(nil))
+var _ = (fs.NodeSetattrer)((*RootNode)(nil))
+var _ = (fs.NodeAccesser)((*RootNode)(nil))
+var _ = (fs.NodeOpendirer)((*RootNode)(nil))
+var _ = (fs.NodeStatfser)((*RootNode)(nil))
 
 var _ fs.FileWriter = (*rootFileHandle)(nil)
 var _ fs.FileReader = (*rootFileHandle)(nil)
