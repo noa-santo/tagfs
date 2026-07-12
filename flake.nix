@@ -10,7 +10,7 @@
       pname = "tagfs";
       version = "0.1.0";
       src = ./.;
-      vendorHash = "sha256-EhadGdk4wpYkvakS4IfswISfFRWTUpDC0SMa/RnO9ZA=";
+      vendorHash = "sha256-PLD7BnqA6ePJ39la7UuhfEPPa++fArIqpHT5a29tkBg=";
       meta.mainProgram = "tagfs";
     };
     

@@ -34,8 +34,8 @@ func main() {
 	mountCmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
 
 	var manageCmd = &cobra.Command{
-		Use:   "manage",
-		Short: "Starts the management TUI",
+		Use:   "inbox",
+		Short: "Starts the inbox management TUI",
 		Run: func(cmd *cobra.Command, args []string) {
 			mainLogger.Println("Opening Inbox Manager...")
 			tui.StartTui()
