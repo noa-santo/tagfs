@@ -14,19 +14,18 @@ func syncPath(path string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			rootLogger.Printf("Error while syncing path %s: %v", path, err)
+		}
+	}(f)
 	return f.Sync()
-}
-
-func syncParent(path string) error {
-	return syncPath(path)
 }
 
 func syncFile(f *os.File) error {
 	if err := f.Sync(); err != nil {
 		return err
 	}
-	// Fsync is intentionally kept explicit for callers that need the syscall
-	// errno while still allowing ordinary *os.File implementations in tests.
 	return unix.Fsync(int(f.Fd()))
 }

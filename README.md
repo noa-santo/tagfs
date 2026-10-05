@@ -9,11 +9,9 @@ the files to the right dir based on the tags (instead of just moving them to the
 Making my home dir a FUSE is also kinda cool because that lets me program special behavior for stuff that I might wanna
 do in the future.
 
-Currently, it's a work in progress. The storage backend is designed to be crash-safe for
-metadata operations (SQLite uses WAL and FULL synchronous mode, and destructive operations
-remove the index before deleting payload bytes), but this should still be treated as experimental
-until it has been exercised with real crash-recovery tests and backups. Keep the storage directory
-on reliable storage and back it up like any other home directory.
+Currently, it's a work in progress.
+Data loss is possible (and tbh currently pretty likely).
+I am working on fixing that though :p
 
 ### Features
 
@@ -40,7 +38,6 @@ on reliable storage and back it up like any other home directory.
 - [ ] when tags are ambiguous give the use the option to display the files in both dirs 
 - [ ] backup db data for files into it's xattr so that the db can be restored when lost
 - [ ] cache virtual path for faster lookup
-- [x] avoid the most noticeable unnecessary FUSE debug logging in normal operation
 - [ ] performance improvements
 
 ### Features that would be cool to have but idk if i'll ever implement them

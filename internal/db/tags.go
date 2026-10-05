@@ -23,7 +23,7 @@ func (db *DB) GetNodesForDir(ctx context.Context, selectedTags []string) ([]gen.
 		allTagsMap[t] = struct{}{}
 	}
 
-	var tagArgs []interface{}
+	var tagArgs []any
 	for t := range allTagsMap {
 		tagArgs = append(tagArgs, t)
 	}
@@ -49,7 +49,12 @@ func (db *DB) GetNodesForDir(ctx context.Context, selectedTags []string) ([]gen.
 	if err != nil {
 		return nil, fmt.Errorf("querying files for tags: %w", err)
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			dbLogger.Fatalf("Error while closing rows: %v", err)
+		}
+	}(rows)
 
 	var nodes []gen.Node
 	for rows.Next() {
