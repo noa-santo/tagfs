@@ -12,6 +12,7 @@ import (
 	"github.com/noa-santo/tagfs/internal/config"
 	"github.com/noa-santo/tagfs/internal/db"
 	"github.com/noa-santo/tagfs/internal/db/gen"
+	"github.com/noa-santo/tagfs/internal/fuse/lib"
 	"github.com/noa-santo/tagfs/internal/logic"
 	"github.com/oklog/ulid/v2"
 )
@@ -145,7 +146,7 @@ func (n *staticDirectoryNode) Mkdir(ctx context.Context, name string, mode uint3
 	if err := os.Mkdir(physicalPath, os.FileMode(mode)); err != nil {
 		return nil, fs.ToErrno(err)
 	}
-	if err := writeNodeMetadata(dirID, name, logic.ToStoredMode(mode, true), n.nodeConfig.Tags); err != nil {
+	if err := lib.WriteNodeMetadata(dirID, name, logic.ToStoredMode(mode, true), n.nodeConfig.Tags); err != nil {
 		return nil, fs.ToErrno(err)
 	}
 	err := db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
@@ -184,8 +185,6 @@ func (n *staticDirectoryNode) Rmdir(ctx context.Context, name string) syscall.Er
 			continue
 		}
 		physicalPath := filepath.Join(config.Get().StoragePath, ".data", node.ID)
-		// Remove the durable index first.  If removing the payload fails, the
-		// node remains hidden but its bytes are still recoverable from .data.
 		if err := db.Get().Queries.DeleteNode(ctx, node.ID); err != nil {
 			return fs.ToErrno(err)
 		}
@@ -193,7 +192,7 @@ func (n *staticDirectoryNode) Rmdir(ctx context.Context, name string) syscall.Er
 			staticDirLogger.Printf("Rmdir: RemoveAll failed for %s: %v", physicalPath, err)
 			return fs.ToErrno(err)
 		}
-		_ = syncParent(filepath.Join(config.Get().StoragePath, ".data"))
+		_ = lib.SyncPath(filepath.Join(config.Get().StoragePath, ".data"))
 		return fs.OK
 	}
 	return syscall.ENOENT
@@ -248,8 +247,6 @@ func (n *staticDirectoryNode) Rename(ctx context.Context, name string, newParent
 	oldPhysicalPath := filepath.Join(config.Get().StoragePath, ".data", target.ID, target.OrigName)
 	newPhysicalPath := filepath.Join(config.Get().StoragePath, ".data", target.ID, newName)
 	if oldPhysicalPath != newPhysicalPath {
-		// Never let a rename replace another payload.  os.Rename replaces its
-		// destination on Linux, which would be silent data loss here.
 		if _, err := os.Lstat(newPhysicalPath); err == nil {
 			return syscall.EEXIST
 		} else if !os.IsNotExist(err) {
@@ -259,7 +256,7 @@ func (n *staticDirectoryNode) Rename(ctx context.Context, name string, newParent
 			staticDirLogger.Printf("Rename: physical rename failed %s -> %s: %v", oldPhysicalPath, newPhysicalPath, err)
 			return fs.ToErrno(err)
 		}
-		if err := syncParent(filepath.Dir(oldPhysicalPath)); err != nil {
+		if err := lib.SyncPath(filepath.Dir(oldPhysicalPath)); err != nil {
 			return fs.ToErrno(err)
 		}
 	}
@@ -283,7 +280,7 @@ func (n *staticDirectoryNode) Rename(ctx context.Context, name string, newParent
 			return syscall.EIO
 		}
 	}
-	if err := writeNodeMetadata(target.ID, newName, target.Mode, tags); err != nil {
+	if err := lib.WriteNodeMetadata(target.ID, newName, target.Mode, tags); err != nil {
 		return fs.ToErrno(err)
 	}
 
@@ -309,7 +306,7 @@ func (n *staticDirectoryNode) Create(ctx context.Context, name string, flags uin
 	if err != nil {
 		return nil, nil, 0, fs.ToErrno(err)
 	}
-	if err := writeNodeMetadata(fileID, name, logic.ToStoredMode(mode, false), n.nodeConfig.Tags); err != nil {
+	if err := lib.WriteNodeMetadata(fileID, name, logic.ToStoredMode(mode, false), n.nodeConfig.Tags); err != nil {
 		_ = f.Close()
 		return nil, nil, 0, fs.ToErrno(err)
 	}
@@ -337,11 +334,11 @@ func (n *staticDirectoryNode) Create(ctx context.Context, name string, flags uin
 		_ = f.Close()
 		return nil, nil, 0, syscall.EIO
 	}
-	if err := syncFile(f); err != nil {
+	if err := lib.SyncFile(f); err != nil {
 		_ = f.Close()
 		return nil, nil, 0, fs.ToErrno(err)
 	}
-	if err := syncParent(filepath.Dir(physicalPath)); err != nil {
+	if err := lib.SyncPath(filepath.Dir(physicalPath)); err != nil {
 		_ = f.Close()
 		return nil, nil, 0, fs.ToErrno(err)
 	}
@@ -390,15 +387,13 @@ func (n *staticDirectoryNode) Unlink(ctx context.Context, name string) syscall.E
 	for _, node := range nodes {
 		if node.OrigName == name {
 			physicalPath := filepath.Join(config.Get().StoragePath, ".data", node.ID)
-			// Index first: a failed database operation must never delete the only
-			// reference to the payload.
 			if err := db.Get().Queries.DeleteNode(ctx, node.ID); err != nil {
 				return fs.ToErrno(err)
 			}
 			if err := os.RemoveAll(physicalPath); err != nil {
 				return fs.ToErrno(err)
 			}
-			_ = syncParent(filepath.Join(config.Get().StoragePath, ".data"))
+			_ = lib.SyncPath(filepath.Join(config.Get().StoragePath, ".data"))
 			return fs.OK
 		}
 	}
@@ -431,7 +426,7 @@ func (n *staticDirectoryNode) Symlink(ctx context.Context, target, name string, 
 		return nil, fs.ToErrno(err)
 	}
 
-	if err := writeNodeMetadata(linkID, name, logic.ToStoredMode(uint32(syscall.S_IFLNK|0777), false), n.nodeConfig.Tags); err != nil {
+	if err := lib.WriteNodeMetadata(linkID, name, logic.ToStoredMode(uint32(syscall.S_IFLNK|0777), false), n.nodeConfig.Tags); err != nil {
 		_ = os.Remove(physicalPath)
 		return nil, fs.ToErrno(err)
 	}

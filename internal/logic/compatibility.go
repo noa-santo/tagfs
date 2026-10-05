@@ -2,6 +2,7 @@ package logic
 
 import (
 	"os"
+	"slices"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/noa-santo/tagfs/internal/config"
@@ -17,7 +18,7 @@ func NodeMatchesRules(path, name string, isDir bool, rules config.Rules) bool {
 	if isDir || len(rules.MimeTypes) == 0 || !rules.ForceMimeTypes {
 		return true
 	}
-	info, err := os.Stat(path)
+	_, err := os.Stat(path)
 	if err != nil {
 		return false
 	}
@@ -25,11 +26,5 @@ func NodeMatchesRules(path, name string, isDir bool, rules config.Rules) bool {
 	if err != nil {
 		return false
 	}
-	kind := mime.String()
-	for _, allowed := range rules.MimeTypes {
-		if allowed == kind {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(rules.MimeTypes, mime.Is)
 }

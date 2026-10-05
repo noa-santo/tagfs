@@ -25,8 +25,10 @@ func TestPassthroughFilePosixIO(t *testing.T) {
 	}
 	buf := make([]byte, 5)
 	result, errno := fh.Read(context.Background(), buf, 0)
-	if errno != 0 || string(result.Bytes(nil)) != "hello" {
-		t.Fatalf("read: %q errno=%v", result, errno)
+	data, status := result.Bytes(buf)
+
+	if errno != 0 || status != 0 || string(data) != "hello" {
+		t.Fatalf("read: %q errno=%v status=%v", data, errno, status)
 	}
 	if errno := fh.Release(context.Background()); errno != 0 {
 		t.Fatalf("release: %v", errno)

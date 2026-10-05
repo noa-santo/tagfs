@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,7 +53,12 @@ func WriteNodeMetadata(m NodeMetadata) error {
 		return err
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer func(name string) {
+		err := os.Remove(name)
+		if err != nil {
+			dbLogger.Printf("Failed to clean up temporary file (%s) after writing metadata: %v", name, err)
+		}
+	}(tmpName)
 	if err = tmp.Chmod(0600); err == nil {
 		_, err = tmp.Write(data)
 	}
@@ -75,8 +81,7 @@ func WriteNodeMetadata(m NodeMetadata) error {
 
 	payload := filepath.Join(filepath.Dir(metadataPath(m.ID)), m.OrigName)
 	if err := unix.Lsetxattr(payload, metadataXattr, data, 0); err != nil {
-		// xattrs are best effort; sidecar remains available.
-		if err != syscall.ENOTSUP && err != syscall.EOPNOTSUPP && err != syscall.EPERM {
+		if !errors.Is(err, syscall.ENOTSUP) && !errors.Is(err, syscall.EOPNOTSUPP) && !errors.Is(err, syscall.EPERM) {
 			return fmt.Errorf("writing metadata xattr: %w", err)
 		}
 	}
@@ -100,13 +105,13 @@ func ReadNodeMetadata(path string) (NodeMetadata, error) {
 
 // RecoverMetadata is idempotent and intentionally only adds records. It never
 // deletes database rows, so a partial recovery cannot destroy information.
-func (d *DB) RecoverMetadata() error {
+func (db *DB) RecoverMetadata() error {
 	root := filepath.Join(config.Get().StoragePath, ".data")
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return err
 	}
-	ctx := d.Ctx
+	ctx := db.Ctx
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -115,13 +120,13 @@ func (d *DB) RecoverMetadata() error {
 		if err != nil || m.ID != entry.Name() {
 			continue
 		}
-		if _, err := d.Queries.GetNode(ctx, m.ID); err == nil {
+		if _, err := db.Queries.GetNode(ctx, m.ID); err == nil {
 			continue
 		}
-		if err := d.Queries.InsertNode(ctx, gen.InsertNodeParams{ID: m.ID, OrigName: m.OrigName, Mode: m.Mode}); err != nil {
+		if err := db.Queries.InsertNode(ctx, gen.InsertNodeParams{ID: m.ID, OrigName: m.OrigName, Mode: m.Mode}); err != nil {
 			return err
 		}
-		if err := d.UpdateTags(m.ID, m.Tags); err != nil {
+		if err := db.UpdateTags(m.ID, m.Tags); err != nil {
 			return err
 		}
 	}
