@@ -3,6 +3,7 @@ package nodes
 import (
 	"os"
 
+	"github.com/noa-santo/tagfs/internal/db"
 	"golang.org/x/sys/unix"
 )
 
@@ -21,6 +22,10 @@ func syncPath(path string) error {
 		}
 	}(f)
 	return f.Sync()
+}
+
+func writeNodeMetadata(id, name string, mode int64, tags []string) error {
+	return db.WriteNodeMetadata(db.NodeMetadata{ID: id, OrigName: name, Mode: mode, Tags: tags})
 }
 
 func syncFile(f *os.File) error {
