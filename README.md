@@ -9,9 +9,11 @@ the files to the right dir based on the tags (instead of just moving them to the
 Making my home dir a FUSE is also kinda cool because that lets me program special behavior for stuff that I might wanna
 do in the future.
 
-Currently, it's a work in progress.
-Data loss is possible (and tbh currently pretty likely).
-I am working on fixing that though :p
+Currently, it's a work in progress. The storage backend is designed to be crash-safe for
+metadata operations (SQLite uses WAL and FULL synchronous mode, and destructive operations
+remove the index before deleting payload bytes), but this should still be treated as experimental
+until it has been exercised with real crash-recovery tests and backups. Keep the storage directory
+on reliable storage and back it up like any other home directory.
 
 ### Features
 
@@ -36,8 +38,9 @@ I am working on fixing that though :p
 - [ ] config option to automatically sort files when x% sure that it guesses the correct tags
 - [ ] for dirs check if a suggestion can be made based on the dirs content
 - [ ] when tags are ambiguous give the use the option to display the files in both dirs 
-- [ ] backup db data for files into it's xattr so that the db can be restored when lost
+- [x] backup node metadata in atomic sidecars and best-effort file/directory xattrs so the DB can be restored when lost
 - [ ] cache virtual path for faster lookup
+- [x] avoid the most noticeable unnecessary FUSE debug logging in normal operation
 - [ ] performance improvements
 
 ### Features that would be cool to have but idk if i'll ever implement them
@@ -51,8 +54,11 @@ I am working on fixing that though :p
 ### How does it work?
 
 All files and dirs are stored structure-less in a store path.
-What tags a dir belongs to is stored in a sqlite database.
-The fuse then dynamically resolves the contents of a dir based on the tags.
+What tags a dir belongs to is stored in a sqlite database. Every node also has an
+atomic `.tagfs-meta.json` recovery record in its `.data/<id>` directory, with a best-effort
+`user.tagfs.metadata` xattr on the payload. On startup, records missing from the database are
+re-imported automatically. The fuse then dynamically resolves the contents of a dir based on
+the tags and configured rules.
 For that a file has to have enough tags to unambiguously infer the dir it belongs to.
 
 ### Screenshots

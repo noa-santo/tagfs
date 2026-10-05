@@ -21,6 +21,8 @@ func StartDaemon() {
 	opts := &fs.Options{
 		Logger: logger,
 		MountOptions: fuse.MountOptions{
+			// Debug logging is prohibitively expensive for a home directory and
+			// can expose file names. Enable it only while diagnosing a mount.
 			Debug: os.Getenv("TAGFS_DEBUG") == "1",
 		},
 	}

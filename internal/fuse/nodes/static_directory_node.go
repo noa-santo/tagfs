@@ -32,6 +32,14 @@ func (n *staticDirectoryNode) isSubdir(name string) bool {
 	return false
 }
 
+func (n *staticDirectoryNode) matchesRules(node gen.Node, path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return logic.NodeMatchesRules(path, node.OrigName, info.IsDir(), n.nodeConfig.Rules)
+}
+
 func (n *staticDirectoryNode) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 	nodes, err := db.Get().GetNodesForDir(ctx, n.nodeConfig.Tags)
 	if err != nil {
@@ -52,6 +60,10 @@ func (n *staticDirectoryNode) Readdir(ctx context.Context) (fs.DirStream, syscal
 		}
 	}
 	for _, node := range nodes {
+		physicalPath := filepath.Join(config.Get().StoragePath, ".data", node.ID, node.OrigName)
+		if !n.matchesRules(node, physicalPath) {
+			continue
+		}
 		result = append(result, fuse.DirEntry{
 			Name: node.OrigName,
 			Ino:  0,
@@ -90,6 +102,9 @@ func (n *staticDirectoryNode) Lookup(ctx context.Context, name string, out *fuse
 		}
 
 		physicalPath := filepath.Join(config.Get().StoragePath, ".data", node.ID, node.OrigName)
+		if !n.matchesRules(node, physicalPath) {
+			continue
+		}
 
 		var st syscall.Stat_t
 		if err := syscall.Stat(physicalPath, &st); err != nil {
@@ -130,6 +145,9 @@ func (n *staticDirectoryNode) Mkdir(ctx context.Context, name string, mode uint3
 	if err := os.Mkdir(physicalPath, os.FileMode(mode)); err != nil {
 		return nil, fs.ToErrno(err)
 	}
+	if err := writeNodeMetadata(dirID, name, logic.ToStoredMode(mode, true), n.nodeConfig.Tags); err != nil {
+		return nil, fs.ToErrno(err)
+	}
 	err := db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
 		ID:       dirID,
 		OrigName: name,
@@ -166,6 +184,8 @@ func (n *staticDirectoryNode) Rmdir(ctx context.Context, name string) syscall.Er
 			continue
 		}
 		physicalPath := filepath.Join(config.Get().StoragePath, ".data", node.ID)
+		// Remove the durable index first.  If removing the payload fails, the
+		// node remains hidden but its bytes are still recoverable from .data.
 		if err := db.Get().Queries.DeleteNode(ctx, node.ID); err != nil {
 			return fs.ToErrno(err)
 		}
@@ -173,7 +193,7 @@ func (n *staticDirectoryNode) Rmdir(ctx context.Context, name string) syscall.Er
 			staticDirLogger.Printf("Rmdir: RemoveAll failed for %s: %v", physicalPath, err)
 			return fs.ToErrno(err)
 		}
-		_ = syncPath(filepath.Join(config.Get().StoragePath, ".data"))
+		_ = syncParent(filepath.Join(config.Get().StoragePath, ".data"))
 		return fs.OK
 	}
 	return syscall.ENOENT
@@ -228,6 +248,8 @@ func (n *staticDirectoryNode) Rename(ctx context.Context, name string, newParent
 	oldPhysicalPath := filepath.Join(config.Get().StoragePath, ".data", target.ID, target.OrigName)
 	newPhysicalPath := filepath.Join(config.Get().StoragePath, ".data", target.ID, newName)
 	if oldPhysicalPath != newPhysicalPath {
+		// Never let a rename replace another payload.  os.Rename replaces its
+		// destination on Linux, which would be silent data loss here.
 		if _, err := os.Lstat(newPhysicalPath); err == nil {
 			return syscall.EEXIST
 		} else if !os.IsNotExist(err) {
@@ -237,7 +259,7 @@ func (n *staticDirectoryNode) Rename(ctx context.Context, name string, newParent
 			staticDirLogger.Printf("Rename: physical rename failed %s -> %s: %v", oldPhysicalPath, newPhysicalPath, err)
 			return fs.ToErrno(err)
 		}
-		if err := syncPath(filepath.Dir(oldPhysicalPath)); err != nil {
+		if err := syncParent(filepath.Dir(oldPhysicalPath)); err != nil {
 			return fs.ToErrno(err)
 		}
 	}
@@ -253,12 +275,16 @@ func (n *staticDirectoryNode) Rename(ctx context.Context, name string, newParent
 		return syscall.EIO
 	}
 
+	tags := n.nodeConfig.Tags
 	if newParentNode.nodeConfig.Name != n.nodeConfig.Name {
-		tags := append(newParentNode.nodeConfig.Tags, logic.GetImplicitTags(newParentNode.nodeConfig.Tags)...)
+		tags = append(newParentNode.nodeConfig.Tags, logic.GetImplicitTags(newParentNode.nodeConfig.Tags)...)
 		if err := db.Get().UpdateTags(target.ID, tags); err != nil {
 			staticDirLogger.Printf("Rename: UpdateTags failed for %s: %v", target.ID, err)
 			return syscall.EIO
 		}
+	}
+	if err := writeNodeMetadata(target.ID, newName, target.Mode, tags); err != nil {
+		return fs.ToErrno(err)
 	}
 
 	return fs.OK
@@ -281,6 +307,10 @@ func (n *staticDirectoryNode) Create(ctx context.Context, name string, flags uin
 	}
 	f, err := os.OpenFile(physicalPath, int(flags)|os.O_CREATE, os.FileMode(mode))
 	if err != nil {
+		return nil, nil, 0, fs.ToErrno(err)
+	}
+	if err := writeNodeMetadata(fileID, name, logic.ToStoredMode(mode, false), n.nodeConfig.Tags); err != nil {
+		_ = f.Close()
 		return nil, nil, 0, fs.ToErrno(err)
 	}
 	err = db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
@@ -311,7 +341,7 @@ func (n *staticDirectoryNode) Create(ctx context.Context, name string, flags uin
 		_ = f.Close()
 		return nil, nil, 0, fs.ToErrno(err)
 	}
-	if err := syncPath(filepath.Dir(physicalPath)); err != nil {
+	if err := syncParent(filepath.Dir(physicalPath)); err != nil {
 		_ = f.Close()
 		return nil, nil, 0, fs.ToErrno(err)
 	}
@@ -360,13 +390,15 @@ func (n *staticDirectoryNode) Unlink(ctx context.Context, name string) syscall.E
 	for _, node := range nodes {
 		if node.OrigName == name {
 			physicalPath := filepath.Join(config.Get().StoragePath, ".data", node.ID)
+			// Index first: a failed database operation must never delete the only
+			// reference to the payload.
 			if err := db.Get().Queries.DeleteNode(ctx, node.ID); err != nil {
 				return fs.ToErrno(err)
 			}
 			if err := os.RemoveAll(physicalPath); err != nil {
 				return fs.ToErrno(err)
 			}
-			_ = syncPath(filepath.Join(config.Get().StoragePath, ".data"))
+			_ = syncParent(filepath.Join(config.Get().StoragePath, ".data"))
 			return fs.OK
 		}
 	}
@@ -399,6 +431,10 @@ func (n *staticDirectoryNode) Symlink(ctx context.Context, target, name string, 
 		return nil, fs.ToErrno(err)
 	}
 
+	if err := writeNodeMetadata(linkID, name, logic.ToStoredMode(uint32(syscall.S_IFLNK|0777), false), n.nodeConfig.Tags); err != nil {
+		_ = os.Remove(physicalPath)
+		return nil, fs.ToErrno(err)
+	}
 	err := db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
 		ID:       linkID,
 		OrigName: name,

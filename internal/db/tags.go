@@ -49,12 +49,7 @@ func (db *DB) GetNodesForDir(ctx context.Context, selectedTags []string) ([]gen.
 	if err != nil {
 		return nil, fmt.Errorf("querying files for tags: %w", err)
 	}
-	defer func(rows *sql.Rows) {
-		err := rows.Close()
-		if err != nil {
-			dbLogger.Fatalf("Error while closing rows: %v", err)
-		}
-	}(rows)
+	defer rows.Close()
 
 	var nodes []gen.Node
 	for rows.Next() {
@@ -117,5 +112,14 @@ func (db *DB) UpdateTags(id string, tags []string) error {
 	}
 	committed = true
 
+	// Keep the recovery record in sync with tag changes. This is metadata-only
+	// work and happens on explicit tagging operations, never on file writes.
+	node, err := db.Queries.GetNode(db.Ctx, id)
+	if err != nil {
+		return fmt.Errorf("reading node after tag update: %w", err)
+	}
+	if err := WriteNodeMetadata(NodeMetadata{ID: node.ID, OrigName: node.OrigName, Mode: node.Mode, Tags: tags}); err != nil {
+		return fmt.Errorf("writing recovery metadata: %w", err)
+	}
 	return nil
 }
