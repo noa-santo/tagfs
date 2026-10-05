@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Go tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Run unit and package tests
+        run: go test ./...
+
+  fuse-integration:
+    name: Mounted FUSE integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install FUSE support
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes fuse3 libfuse3-dev
+          sudo modprobe fuse
+          test -e /dev/fuse
+      - name: Run mounted FUSE tests
+        env:
+          TAGFS_FUSE_TEST: "1"
+        run: go test ./internal/fuse/nodes -run TestMountedPassthroughPOSIX -count=1 -v

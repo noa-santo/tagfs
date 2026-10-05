@@ -21,7 +21,7 @@ func StartDaemon() {
 	opts := &fs.Options{
 		Logger: logger,
 		MountOptions: fuse.MountOptions{
-			Debug: true,
+			Debug: os.Getenv("TAGFS_DEBUG") == "1",
 		},
 	}
 	root := &nodes.RootNode{}

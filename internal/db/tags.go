@@ -23,7 +23,7 @@ func (db *DB) GetNodesForDir(ctx context.Context, selectedTags []string) ([]gen.
 		allTagsMap[t] = struct{}{}
 	}
 
-	var tagArgs []interface{}
+	var tagArgs []any
 	for t := range allTagsMap {
 		tagArgs = append(tagArgs, t)
 	}
@@ -85,7 +85,7 @@ func (db *DB) UpdateTags(id string, tags []string) error {
 		}
 		err := tx.Rollback()
 		if err != nil {
-			dbLogger.Fatalf("Error while rolling back transaction: %v", err)
+			dbLogger.Printf("Error while rolling back transaction: %v", err)
 		}
 	}(tx, &committed)
 	qtx := db.Queries.WithTx(tx)
@@ -117,5 +117,12 @@ func (db *DB) UpdateTags(id string, tags []string) error {
 	}
 	committed = true
 
+	node, err := db.Queries.GetNode(db.Ctx, id)
+	if err != nil {
+		return fmt.Errorf("reading node after tag update: %w", err)
+	}
+	if err := WriteNodeMetadata(NodeMetadata{ID: node.ID, OrigName: node.OrigName, Mode: node.Mode, Tags: tags}); err != nil {
+		return fmt.Errorf("writing recovery metadata: %w", err)
+	}
 	return nil
 }

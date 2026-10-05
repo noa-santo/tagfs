@@ -13,6 +13,7 @@ import (
 	"github.com/noa-santo/tagfs/internal/config"
 	"github.com/noa-santo/tagfs/internal/db"
 	"github.com/noa-santo/tagfs/internal/db/gen"
+	"github.com/noa-santo/tagfs/internal/logic"
 	. "github.com/noa-santo/tagfs/internal/shared"
 )
 
@@ -33,7 +34,11 @@ func categorizedFileIDs(ctx context.Context, dirConfigs []config.DirectoryConfig
 				return err
 			}
 			for _, f := range files {
-				matched[f.ID] = true
+				physicalPath := filepath.Join(config.Get().StoragePath, ".data", f.ID, f.OrigName)
+				info, statErr := os.Stat(physicalPath)
+				if statErr == nil && logic.NodeMatchesRules(physicalPath, f.OrigName, info.IsDir(), dirConf.Rules) {
+					matched[f.ID] = true
+				}
 			}
 			if len(dirConf.Subdirectories) > 0 {
 				if err := walk(dirConf.Subdirectories); err != nil {

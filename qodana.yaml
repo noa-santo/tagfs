@@ -8,3 +8,26 @@ profile:
   name: qodana.recommended
 include:
   - name: CheckDependencyLicenses
+  - name: CheckModuleLicenses
+  - name: IncorrectFormatting
+  - name: RedundantSuppression
+  - name: Annotator
+  - name: GoExportedElementShouldHaveComment
+  - name: GoInterfaceToAny
+  - name: GoUnnecessarilyExportedIdentifiers
+  - name: GoShadowedVar
+  - name: GoNilness
+  - name: VgoUnusedDependency
+  - name: VgoDependencyUpdateAvailable
+  - name: VgoDependencyDeprecated
+  - name: VgoRequireDirectivesMerge
+  - name: VgoDependencyVersionRetracted
+  - name: GoTemplateDuplicateVariable
+  - name: JsonSchemaCompliance
+  - name: JsonSchemaCompliance
+  - name: JsonStandardCompliance
+  - name: JsonSchemaDeprecation
+  - name: JsonDuplicatePropertyKeys
+  - name: JsonSchemaRefReference
+  - name: CyclomaticComplexityInspection
+  - name: ShellCheck

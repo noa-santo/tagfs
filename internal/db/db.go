@@ -38,12 +38,29 @@ func Get() *DB {
 func initDB() {
 	ctx := context.Background()
 
-	dbPath := filepath.Join(config.Get().StoragePath, ".config", "tagfs.db")
+	dbDir := filepath.Join(config.Get().StoragePath, ".config")
+	if err := os.MkdirAll(dbDir, 0700); err != nil {
+		dbLogger.Panicf("Error creating database directory: %v", err)
+	}
+	dbPath := filepath.Join(dbDir, "tagfs.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		dbLogger.Panicf("Error opening database: %v", err)
 	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
+	pragmas := []string{
+		"PRAGMA foreign_keys = ON",
+		"PRAGMA journal_mode = WAL",
+		"PRAGMA synchronous = FULL",
+		"PRAGMA busy_timeout = 5000",
+	}
+	for _, pragma := range pragmas {
+		if _, err := db.ExecContext(ctx, pragma); err != nil {
+			dbLogger.Panicf("SQLite setup failed (%s): %v", pragma, err)
+		}
+	}
 	if err := migrate(ctx, db); err != nil {
 		dbLogger.Panicf("Migration failed: %v", err)
 	}
@@ -53,6 +70,9 @@ func initDB() {
 		db:      db,
 		Queries: queries,
 		Ctx:     ctx,
+	}
+	if err := globalDBInstance.RecoverMetadata(); err != nil {
+		dbLogger.Printf("Metadata recovery incomplete: %v", err)
 	}
 }
 

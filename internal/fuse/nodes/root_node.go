@@ -14,6 +14,7 @@ import (
 	"github.com/noa-santo/tagfs/internal/config"
 	"github.com/noa-santo/tagfs/internal/db"
 	"github.com/noa-santo/tagfs/internal/db/gen"
+	"github.com/noa-santo/tagfs/internal/fuse/lib"
 	"github.com/noa-santo/tagfs/internal/logic"
 	"github.com/oklog/ulid/v2"
 )
@@ -85,6 +86,10 @@ func (n *RootNode) Create(ctx context.Context, name string, flags uint32, mode u
 		rootLogger.Printf("Error creating physical file: %v", err)
 		return nil, nil, 0, fs.ToErrno(err)
 	}
+	if err := lib.WriteNodeMetadata(fileID, name, logic.ToStoredMode(mode, false), nil); err != nil {
+		_ = f.Close()
+		return nil, nil, 0, fs.ToErrno(err)
+	}
 	err = db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
 		ID:       fileID,
 		OrigName: name,
@@ -129,6 +134,9 @@ func (n *RootNode) Mkdir(ctx context.Context, name string, mode uint32, out *fus
 	if err := os.Mkdir(physicalPath, os.FileMode(mode)); err != nil {
 		return nil, fs.ToErrno(err)
 	}
+	if err := lib.WriteNodeMetadata(dirID, name, logic.ToStoredMode(mode, true), nil); err != nil {
+		return nil, fs.ToErrno(err)
+	}
 	err := db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
 		ID:       dirID,
 		OrigName: name,
@@ -167,6 +175,10 @@ func (n *RootNode) Symlink(ctx context.Context, target, name string, _ *fuse.Ent
 	}
 	physicalPath := filepath.Join(dataPath, name)
 	if err := os.Symlink(target, physicalPath); err != nil {
+		return nil, fs.ToErrno(err)
+	}
+	if err := lib.WriteNodeMetadata(linkID, name, logic.ToStoredMode(uint32(syscall.S_IFLNK|0777), false), nil); err != nil {
+		_ = os.Remove(physicalPath)
 		return nil, fs.ToErrno(err)
 	}
 	err := db.Get().Queries.InsertNode(ctx, gen.InsertNodeParams{
@@ -298,6 +310,7 @@ func (fh *rootFileHandle) Release(ctx context.Context) syscall.Errno {
 			rootLogger.Printf("Error updating DB stats for file %s: %v", fh.name, dbErr)
 		}
 	}
+	syncErr := lib.SyncFile(fh.file)
 	closeErr := fh.file.Close()
 
 	go func() {
@@ -308,6 +321,9 @@ func (fh *rootFileHandle) Release(ctx context.Context) syscall.Errno {
 		}
 	}()
 
+	if syncErr != nil {
+		return fs.ToErrno(syncErr)
+	}
 	if closeErr != nil {
 		return fs.ToErrno(closeErr)
 	}
