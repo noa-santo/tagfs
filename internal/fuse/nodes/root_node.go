@@ -298,6 +298,7 @@ func (fh *rootFileHandle) Release(ctx context.Context) syscall.Errno {
 			rootLogger.Printf("Error updating DB stats for file %s: %v", fh.name, dbErr)
 		}
 	}
+	syncErr := syncFile(fh.file)
 	closeErr := fh.file.Close()
 
 	go func() {
@@ -308,6 +309,9 @@ func (fh *rootFileHandle) Release(ctx context.Context) syscall.Errno {
 		}
 	}()
 
+	if syncErr != nil {
+		return fs.ToErrno(syncErr)
+	}
 	if closeErr != nil {
 		return fs.ToErrno(closeErr)
 	}

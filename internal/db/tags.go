@@ -49,12 +49,7 @@ func (db *DB) GetNodesForDir(ctx context.Context, selectedTags []string) ([]gen.
 	if err != nil {
 		return nil, fmt.Errorf("querying files for tags: %w", err)
 	}
-	defer func(rows *sql.Rows) {
-		err := rows.Close()
-		if err != nil {
-			dbLogger.Fatalf("Error while closing rows: %v", err)
-		}
-	}(rows)
+	defer rows.Close()
 
 	var nodes []gen.Node
 	for rows.Next() {
@@ -85,7 +80,7 @@ func (db *DB) UpdateTags(id string, tags []string) error {
 		}
 		err := tx.Rollback()
 		if err != nil {
-			dbLogger.Fatalf("Error while rolling back transaction: %v", err)
+			dbLogger.Printf("Error while rolling back transaction: %v", err)
 		}
 	}(tx, &committed)
 	qtx := db.Queries.WithTx(tx)

@@ -2,8 +2,12 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -63,10 +67,43 @@ func InitConfig(path string) error {
 		dbLogger.Printf("Error decoding JSON config: %v", err)
 		return err
 	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("config contains multiple JSON values")
+		}
+		return fmt.Errorf("invalid trailing config data: %w", err)
+	}
+	if cfg.StoragePath == "" || cfg.MountPath == "" || cfg.InboxDir == "" {
+		return fmt.Errorf("storage_path, mount_path, and inbox_dir are required")
+	}
+	storage, err := filepath.Abs(cfg.StoragePath)
+	if err != nil {
+		return fmt.Errorf("invalid storage_path: %w", err)
+	}
+	mount, err := filepath.Abs(cfg.MountPath)
+	if err != nil {
+		return fmt.Errorf("invalid mount_path: %w", err)
+	}
+	if storage == mount || isWithin(storage, mount) || isWithin(mount, storage) {
+		return fmt.Errorf("mount_path and storage_path must not contain one another")
+	}
+	if err := os.MkdirAll(filepath.Join(storage, ".data"), 0700); err != nil {
+		return fmt.Errorf("creating storage directory: %w", err)
+	}
+	if err := os.MkdirAll(mount, 0755); err != nil {
+		return fmt.Errorf("creating mount directory: %w", err)
+	}
+	cfg.StoragePath, cfg.MountPath = storage, mount
 
 	globalCfg = cfg
 	loaded = true
 	return nil
+}
+
+func isWithin(parent, child string) bool {
+	rel, err := filepath.Rel(parent, child)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func Get() Config {

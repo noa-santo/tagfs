@@ -166,14 +166,16 @@ func (n *staticDirectoryNode) Rmdir(ctx context.Context, name string) syscall.Er
 			continue
 		}
 		physicalPath := filepath.Join(config.Get().StoragePath, ".data", node.ID)
-		if err := os.RemoveAll(physicalPath); err != nil {
-			staticDirLogger.Printf("Rmdir: RemoveAll failed for %s: %v", physicalPath, err)
-			return syscall.EIO
-		}
-		err := db.Get().Queries.DeleteNode(ctx, node.ID)
-		if err != nil {
+		// Remove the durable index first.  If removing the payload fails, the
+		// node remains hidden but its bytes are still recoverable from .data.
+		if err := db.Get().Queries.DeleteNode(ctx, node.ID); err != nil {
 			return fs.ToErrno(err)
 		}
+		if err := os.RemoveAll(physicalPath); err != nil {
+			staticDirLogger.Printf("Rmdir: RemoveAll failed for %s: %v", physicalPath, err)
+			return fs.ToErrno(err)
+		}
+		_ = syncParent(filepath.Join(config.Get().StoragePath, ".data"))
 		return fs.OK
 	}
 	return syscall.ENOENT
@@ -215,12 +217,31 @@ func (n *staticDirectoryNode) Rename(ctx context.Context, name string, newParent
 	if newParentNode.GetChild(newName) != nil {
 		return syscall.EEXIST
 	}
+	destinationNodes, err := db.Get().GetNodesForDir(ctx, newParentNode.nodeConfig.Tags)
+	if err != nil {
+		return syscall.EIO
+	}
+	for _, destination := range destinationNodes {
+		if destination.OrigName == newName && destination.ID != target.ID {
+			return syscall.EEXIST
+		}
+	}
 
 	oldPhysicalPath := filepath.Join(config.Get().StoragePath, ".data", target.ID, target.OrigName)
 	newPhysicalPath := filepath.Join(config.Get().StoragePath, ".data", target.ID, newName)
 	if oldPhysicalPath != newPhysicalPath {
+		// Never let a rename replace another payload.  os.Rename replaces its
+		// destination on Linux, which would be silent data loss here.
+		if _, err := os.Lstat(newPhysicalPath); err == nil {
+			return syscall.EEXIST
+		} else if !os.IsNotExist(err) {
+			return fs.ToErrno(err)
+		}
 		if err := os.Rename(oldPhysicalPath, newPhysicalPath); err != nil {
 			staticDirLogger.Printf("Rename: physical rename failed %s -> %s: %v", oldPhysicalPath, newPhysicalPath, err)
+			return fs.ToErrno(err)
+		}
+		if err := syncParent(filepath.Dir(oldPhysicalPath)); err != nil {
 			return fs.ToErrno(err)
 		}
 	}
@@ -286,6 +307,17 @@ func (n *staticDirectoryNode) Create(ctx context.Context, name string, flags uin
 
 	if err := db.Get().UpdateTags(fileID, n.nodeConfig.Tags); err != nil {
 		staticDirLogger.Printf("Create: UpdateTags failed for %s: %v", fileID, err)
+		_ = db.Get().Queries.DeleteNode(ctx, fileID)
+		_ = f.Close()
+		return nil, nil, 0, syscall.EIO
+	}
+	if err := syncFile(f); err != nil {
+		_ = f.Close()
+		return nil, nil, 0, fs.ToErrno(err)
+	}
+	if err := syncParent(filepath.Dir(physicalPath)); err != nil {
+		_ = f.Close()
+		return nil, nil, 0, fs.ToErrno(err)
 	}
 
 	childNode := &passthroughNode{Path: physicalPath}
@@ -332,12 +364,15 @@ func (n *staticDirectoryNode) Unlink(ctx context.Context, name string) syscall.E
 	for _, node := range nodes {
 		if node.OrigName == name {
 			physicalPath := filepath.Join(config.Get().StoragePath, ".data", node.ID)
-			if err := os.RemoveAll(physicalPath); err != nil {
-				return fs.ToErrno(err)
-			}
+			// Index first: a failed database operation must never delete the only
+			// reference to the payload.
 			if err := db.Get().Queries.DeleteNode(ctx, node.ID); err != nil {
 				return fs.ToErrno(err)
 			}
+			if err := os.RemoveAll(physicalPath); err != nil {
+				return fs.ToErrno(err)
+			}
+			_ = syncParent(filepath.Join(config.Get().StoragePath, ".data"))
 			return fs.OK
 		}
 	}
