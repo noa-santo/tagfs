@@ -17,8 +17,8 @@ var (
 
 type Rules struct {
 	MimeTypes           []string `json:"mime_types"`
-	ForceMimeTypes      bool     `json:"force_mime_types"`
 	NamePatterns        []string `json:"name_patterns"`
+	ForceMimeTypes      bool     `json:"force_mime_types"`
 	ForceNamePattern    bool     `json:"force_name_pattern"`
 	AllowSubdirCreation bool     `json:"allow_subdir_creation"`
 	AllowFileCreation   bool     `json:"allow_file_creation"`
